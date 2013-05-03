@@ -187,6 +187,16 @@ skip_move_player_down
 		dec spr1_y
 skip_move_player_up
 
+		lda #%00000101
+		cmp	spr_spr_collision
+		bne skip_enemy_hit
+		inc spr0_col
+		lda #%11111011			; disable bullet sprite
+		and spr_enable
+		sta spr_enable
+
+skip_enemy_hit
+
 		
 		;; update star field
 		
@@ -355,7 +365,8 @@ spr2_y = $d005
 spr2_col = $d029
 
 spr_enable = $d015
-		
+spr_spr_collision = $d01e
+
 spr_size_bytes = 3*21
 
 screen_size_x_px = 320
@@ -365,7 +376,6 @@ color_ram = $d800
 		
 joystick_1 = $dc01
 joystick_2 = $dc00
-
 
 player_y_line = $a0			; static screen line the player is on
 
