@@ -8,7 +8,7 @@
 zero_page_store = $04
 zero_page_temp_var	= zero_page_store
 star_positions_white = zero_page_store +2
-num_stars_white = 5 
+num_stars_white = 10
 star_positions_white_end = (star_positions_white + (num_stars_white*3)) -1
 
 DUMMY_BYTE = $00
@@ -379,16 +379,28 @@ bullet_data
 zero_page_data_src
 		.byte $19, $79			; dummy, variable store
 star_positions_white_src		; (screen ram position in col 0, x offset)
-		.word $0400
-		.byte 10
-		.word $0428
-		.byte 12
-		.word $0450
-		.byte 14
-		.word $0478
-		.byte 16
-		.word $04a0
-		.byte 18
+		.word $428
+		.byte 37
+		.word $450
+		.byte 24
+		.word $770
+		.byte 17
+		.word $608
+		.byte 5
+		.word $5b8
+		.byte 28
+		.word $568
+		.byte 27
+		.word $608
+		.byte 8
+		.word $4a0
+		.byte 36
+		.word $400
+		.byte 11
+		.word $6a8
+		.byte 1
+		.word $450
+		.byte 26		
 zero_page_data_src_end
 		
 star_char_1
