@@ -1,26 +1,58 @@
-; in emacs, compile this file to a .PRG file using ~/opt/c64/bin/tmpx ${THISFILE}.asm
-; in VICE, mount the .PRG File > Smart attach disk/tape
-
+;;; -----------------------------------------------------------------------------
+;;; - Compile this file to a .PRG file using ~/opt/c64/bin/tmpx ${THISFILE}.asm
+;;; - In VICE, mount the .PRG File > Smart attach disk/tape (Cmd-O)
+;;;
+;;; (c) 2013 Erik / SHINSETSU
+;;; -----------------------------------------------------------------------------
 
 		
-* = $0801 ; start address 
 
-; SYS 2064 in BASIC
+
+;;; -----------------------------------------------------------------------------
+;;; BASIC loader using SYS 2064
+;;; -----------------------------------------------------------------------------
+
+* = $0801
+
 .byte $0c,$08,$d0,$07,$9e
 .text " 2064"
 .byte $00,$00,$00,$00
 
+		
 * = $0810
 
+;;; -----------------------------------------------------------------------------
+;;; initialize the screen
+;;; -----------------------------------------------------------------------------
 		
-		lda #0					; black bg and fg
+		lda #0					; set black bg and fg
 		sta $d020
 		sta $d021
 		jsr $e544				; clear screen
 
 
+		ldx #$ff
+		lda #white
+init_color_ram
+		sta color_ram,x
+		sta color_ram+$100,x
+		sta color_ram+$200,x
+		dex
+		bne init_color_ram
+		
+		ldx #$e8				; clear last bit of screen from $300 to $3e8
+init_color_ram_last_chunk
+		sta color_ram+$300,x
+		dex
+		bne init_color_ram_last_chunk
+
+		
+;;; -----------------------------------------------------------------------------
+;;; draw a simple static star field
+;;; -----------------------------------------------------------------------------
+		
 drawstars
-		lda star_char_1			; draw a basic star field
+		lda star_char_1			; draw a basic static star field
 		ldy #white
 		sta screen_ram + 0
 		sty color_ram + 0
@@ -32,19 +64,10 @@ drawstars
 		sty color_ram + $300
 		
 
-		
-		jmp end_credits
-credits
-        ldx #0           ; start with character 0
-next
-        lda message,x    ; read character X from message
-        beq end_credits	 ; we're done when we read a zero byte
-        jsr CHROUT       ; call CHROUT to output char to current output device (defaults to screen)
-        inx              ; next character
-        bne next         ; loop back while index is not zero (max string length 255 bytes)
-end_credits
+;;; -----------------------------------------------------------------------------
+;;; init sprites
+;;; -----------------------------------------------------------------------------
 
-		
 		lda #13					; sprite 0 starts at 13 * 64 = 832 = $0340
 		sta spr0_ptr
 		ldx #0
@@ -108,9 +131,9 @@ loopje
 		jmp loopje
 
 
-		;; --------------------------
-        ;;  raster interrupt handler
-		;; --------------------------
+;;; -----------------------------------------------------------------------------
+;;; main loop, implemented as a raster interrupt handler
+;;; -----------------------------------------------------------------------------
 
 int_handler		     			; we do our work here	
 
@@ -162,6 +185,36 @@ skip_move_player_right
 skip_move_player_left
 
 		
+		;; update star field
+		
+screen_ram_row_0 = screen_ram + (4*40)
+screen_ram_row_0_plus_1 = (screen_ram + (4*40) + 1)
+color_ram_row_0 = color_ram + (4*40)
+color_ram_row_0_plus_1 = (color_ram + (4*40) + 1)
+		
+;; 		lda star_char_1
+;; star_1	ldx #13					; star start pos, will be modified by code
+;; 		sta screen_ram_row_0, x ; draw star
+;; 		lda #$20				; space char to clear star's position
+;; 		sta screen_ram_row_0_plus_1, x ; TODO do this with invariant y = #$20?
+;; 		dex
+;; 		bne skip_reset_star_1
+;; 		ldx #25					; screen width
+;; skip_reset_star_1		
+;; 		stx star_1+1			; self-modifying code
+
+		lda #$20 				; clear current star's position with a space
+star_1	ldx #13					; star start pos, will be modified by code
+		sta screen_ram_row_0, x
+		dex
+		bne skip_reset_star_1
+		ldx #25					; screen width
+skip_reset_star_1		
+		stx star_1+1			; self-modifying code
+		lda star_char_1			; 
+		sta screen_ram_row_0, x ; TODO do this with invariant y = #$20?
+
+		
 int_handler_wrapup		
         asl $d019    			; ACK interrupt (to re-enable it)		
         pla
@@ -172,11 +225,10 @@ int_handler_wrapup
         rti			    	    ; return from interrupt
 
 
+;;; -----------------------------------------------------------------------------
+;;; adapted from http://ocaoimh.ie/wp-content/uploads/2008/01/intro-to-programming-c64-demos.html#SECTION00086000000000000000
+;;; -----------------------------------------------------------------------------
 		
-		;; --------------------------
-        ;;  adapted from http://ocaoimh.ie/wp-content/uploads/2008/01/intro-to-programming-c64-demos.html#SECTION00086000000000000000
-		;; --------------------------
-
 init_screen_for_raster_int
 
         lda #$1b 				; clear hi bit of raster int scanline (lo is at $d012) and set text mode
@@ -201,21 +253,16 @@ install_raster_int
         ldy #$80     			; set scanline on which to trigger interrupt
         sty $d012
 
-        lda $dc0d    ; ACK CIA 1 interrupts
-        lda $dd0d    ; ACK CIA 2 interrupts
-        asl $d019    ; ACK VIC interrupts
+        lda $dc0d    			; ACK CIA 1 interrupts
+        lda $dd0d    			; ACK CIA 2 interrupts
+        asl $d019    			; ACK VIC interrupts
         cli
 
 		rts
 
 message
-        .null "(c) 2013 lemon / shinsetsu"
+        .null "(c) 2013 lemon/shinsetsu"
 
-star_char_1
-		.screen "."
-
-star_char_2
-		.screen "*"
 		
 enemy_data
 		.byte %00000000,%00000000,%00000000
@@ -262,7 +309,7 @@ ship_data
 		.byte %00011111,%11100111,%11111000
 		.byte %00011111,%11111111,%11111000
 		.byte %00010000,%00011000,%00001000
-
+		
 bullet_data
 		.byte %00000000,%00000000,%00000000
 		.byte %00000000,%00000000,%00000000
@@ -286,6 +333,19 @@ bullet_data
 		.byte %00000000,%00000000,%00000000
 		.byte %00000000,%00000000,%00000000
 
+
+num_stars_white = 5		
+
+star_char_1
+		.screen "."
+
+star_char_2
+		.screen "*"
+
+star_positions_white
+		.word $1, $92, $200, $300, $400
+		
+
 		
 spr0_ptr = $07f8
 spr0_x = $d000
@@ -307,16 +367,16 @@ spr_enable = $d015
 spr_size_bytes = 3*21
 
 screen_ram = $0400
+screen_ram_size = 40*25
 color_ram = $d800		
 		
 joystick_1 = $dc01
 joystick_2 = $dc00
 
-;; static screen line the player is on
-player_y_line = $a0
+
+player_y_line = $a0			; static screen line the player is on
 
 
-CHROUT  = $ffd2          ; CHROUT sends a character to the current output device
 		
 black = 0
 white = 1
@@ -334,3 +394,8 @@ grey = 12
 light_green = 13
 light_blue = 14
 light_grey = 15
+
+
+;;; kernal routines
+		
+CHROUT  = $ffd2          
