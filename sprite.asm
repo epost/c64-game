@@ -1,49 +1,39 @@
 ; in emacs, compile this file to a .PRG file using ~/opt/c64/bin/tmpx ${THISFILE}.asm
 ; in VICE, mount the .PRG File > Smart attach disk/tape
-; do SYS 49152 (for start address * = $c000) 
-		
-		
-* = $c000 
-
-spr0_ptr = $07f8
-spr0_x = $d000
-spr0_y = $d001
-spr0_col = $d027
-
-spr1_ptr = $07f9
-spr1_x = $d002
-spr1_y = $d003
-spr1_col = $d028
-		
-spr2_ptr = $07fa
-spr2_x = $d004
-spr2_y = $d005
-spr2_col = $d029
-
-spr_enable = $d015
-		
-spr_size_bytes = 3*21
-
-joystick_1 = $dc01
-joystick_2 = $dc00
-
-;; static screen line the player is on
-player_y_line = $a0
-
-
-CHROUT  = $ffd2          ; CHROUT sends a character to the current output device
-CR      = $0d            ; PETSCII code for Carriage Return
-
 
 
 		
-		
+* = $0801 ; start address 
+
+; SYS 2064 in BASIC
+.byte $0c,$08,$d0,$07,$9e
+.text " 2064"
+.byte $00,$00,$00,$00
+
+* = $0810
+
 		
 		lda #0					; black bg and fg
 		sta $d020
 		sta $d021
 		jsr $e544				; clear screen
 
+
+drawstars
+		lda star_char_1			; draw a basic star field
+		ldy #white
+		sta screen_ram + 0
+		sty color_ram + 0
+		sta screen_ram + $92
+		sty color_ram + $92
+		sta screen_ram + $200
+		sty color_ram + $200
+		sta screen_ram + $300
+		sty color_ram + $300
+		
+
+		
+		jmp end_credits
 credits
         ldx #0           ; start with character 0
 next
@@ -65,7 +55,7 @@ fill_spr0
 		cpx	#spr_size_bytes
 		bne fill_spr0
 		
-		
+
 		lda #14					; sprite 1 starts at address 14 * 64
 		sta spr1_ptr
 		ldx #0					; copy sprite 1 data
@@ -90,10 +80,12 @@ fill_spr2
 		
 		lda #$70 				;  set x and y for sprite 0
 		sta spr0_x	
+		lda #0 				
 		sta spr0_y
 
-		sta spr1_x 				;  set x and y for sprite 1
-		lda #$a0 				
+		lda #$70 				;  set x and y for sprite 1
+		sta spr1_x 				
+		lda #$e0 				
 		sta spr1_y
 
 		sta spr2_x 				;  set x and y for sprite 1
@@ -122,8 +114,8 @@ loopje
 
 int_handler		     			; we do our work here	
 
-		inc spr0_x
-		inc spr0_x
+		inc spr0_y
+		inc spr0_y
 		
 		lda %00000100			; are there bullets onscreen?
 		bit spr_enable			
@@ -218,6 +210,12 @@ install_raster_int
 
 message
         .null "(c) 2013 lemon / shinsetsu"
+
+star_char_1
+		.screen "."
+
+star_char_2
+		.screen "*"
 		
 enemy_data
 		.byte %00000000,%00000000,%00000000
@@ -288,6 +286,37 @@ bullet_data
 		.byte %00000000,%00000000,%00000000
 		.byte %00000000,%00000000,%00000000
 
+		
+spr0_ptr = $07f8
+spr0_x = $d000
+spr0_y = $d001
+spr0_col = $d027
+
+spr1_ptr = $07f9
+spr1_x = $d002
+spr1_y = $d003
+spr1_col = $d028
+		
+spr2_ptr = $07fa
+spr2_x = $d004
+spr2_y = $d005
+spr2_col = $d029
+
+spr_enable = $d015
+		
+spr_size_bytes = 3*21
+
+screen_ram = $0400
+color_ram = $d800		
+		
+joystick_1 = $dc01
+joystick_2 = $dc00
+
+;; static screen line the player is on
+player_y_line = $a0
+
+
+CHROUT  = $ffd2          ; CHROUT sends a character to the current output device
 		
 black = 0
 white = 1
