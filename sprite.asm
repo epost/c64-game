@@ -201,14 +201,32 @@ skip_enemy_hit
 		;; update star field
 		
 screen_ram_row_0 = screen_ram + (4*40)
-screen_ram_row_0_plus_1 = (screen_ram + (4*40) + 1)
+screen_ram_row_0_plus_1 = screen_ram + (4*40) + 1
 color_ram_row_0 = color_ram + (4*40)
-color_ram_row_0_plus_1 = (color_ram + (4*40) + 1)
+color_ram_row_0_plus_1 = color_ram + (4*40) + 1
 
-scroll_counter_x = $033d		
+scroll_x = $d016
 
-		dec scroll_counter_x
-		bne skip_shift_bg_chars
+		lda scroll_x 			; do optional smooth scrolling
+		and #%00000111
+		beq shift_bg_chars
+		tax
+		dex
+		lda scroll_x
+		and #%11111000
+		stx $10					; temp store x somewhere in zero page
+		ora $10
+		
+		sta scroll_x
+		jmp skip_shift_bg_chars
+
+shift_bg_chars
+
+		lda #%00000111
+		ora scroll_x		
+		sta scroll_x
+
+		
 		
 		lda #$20 				; clear current star's position with a space
 star_1	ldx #13					; star start pos, will be modified by code
@@ -222,6 +240,7 @@ skip_reset_star_1
 		sta screen_ram_row_0, x ; TODO do this with invariant y = #$20?
 skip_shift_bg_chars
 
+		
 int_handler_wrapup		
         asl $d019    			; ACK interrupt (to re-enable it)		
         pla
