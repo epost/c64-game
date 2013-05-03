@@ -4,10 +4,15 @@
 ;;;
 ;;; (c) 2013 Erik / SHINSETSU
 ;;; -----------------------------------------------------------------------------
-
 		
+zero_page_store = $04
+zero_page_temp_var	= zero_page_store
+star_positions_white = zero_page_store +2
+num_stars_white = 5 
+star_positions_white_end = (star_positions_white + (num_stars_white*3)) -1
 
-
+DUMMY_BYTE = $00
+		
 ;;; -----------------------------------------------------------------------------
 ;;; BASIC loader using SYS 2064
 ;;; -----------------------------------------------------------------------------
@@ -31,7 +36,7 @@
 		jsr $e544				; clear screen
 
 		ldx #$ff
-		lda #white
+		lda #light_grey
 init_color_ram
 		sta color_ram,x
 		sta color_ram+$100,x
@@ -50,18 +55,12 @@ init_color_ram_last_chunk
 ;;; draw a simple static star field
 ;;; -----------------------------------------------------------------------------
 		
-draw_static_stars
-		lda star_char_1			; draw a basic static star field
-		ldy #dark_grey
-		sta screen_ram + 0
-		sty color_ram + 0
-		sta screen_ram + $92
-		sty color_ram + $92
-		sta screen_ram + $200
-		sty color_ram + $200
-		sta screen_ram + $300
-		sty color_ram + $300
-		
+		ldx #(zero_page_data_src_end - zero_page_data_src)
+fill_star_data
+		lda zero_page_data_src,x
+		sta zero_page_store,x
+		dex
+		bne fill_star_data
 
 ;;; -----------------------------------------------------------------------------
 ;;; init sprites
@@ -96,9 +95,7 @@ fill_spr2
 		sta 9*64,x
 		inx
 		cpx	#spr_size_bytes
-		bne fill_spr2
-
-
+		bne fill_spr2		
 		
 		lda #$70 				;  set x and y for sprite 0 (enemy)
 		sta spr0_x	
@@ -198,25 +195,19 @@ skip_move_player_up
 skip_enemy_hit
 
 		
-		;; update star field
-		
-screen_ram_row_0 = screen_ram + (4*40)
-screen_ram_row_0_plus_1 = screen_ram + (4*40) + 1
-color_ram_row_0 = color_ram + (4*40)
-color_ram_row_0_plus_1 = color_ram + (4*40) + 1
-
-scroll_x = $d016
+;;; -----------------------------------------------------------------------------
+;;; update star field
+;;; -----------------------------------------------------------------------------
 
 		lda scroll_x 			; do optional smooth scrolling
 		and #%00000111
-		beq shift_bg_chars
 		tax
 		dex
-		lda scroll_x
+		bmi shift_bg_chars
+		lda scroll_x			; smooth scroll 1 pixel to the left
 		and #%11111000
-		stx $10					; temp store x somewhere in zero page
-		ora $10
-		
+		stx zero_page_temp_var
+		ora zero_page_temp_var		
 		sta scroll_x
 		jmp skip_shift_bg_chars
 
@@ -225,21 +216,46 @@ shift_bg_chars
 		lda #%00000111
 		ora scroll_x		
 		sta scroll_x
+		
+		ldx #(num_stars_white*3)-1 	; TODO eliminate *3
 
+		ldy #star_positions_white_end	; self-modifying code: reset hardcoded pointers to end of table
+		dey
+		dey
+		sty modme2a+1			
+		sty modme2b+1			
 		
+next_star
+modme1	lda star_positions_white,x		; Y = star's screen column
+		tay
+
+		lda #$20				; clear star's old position with space char
+modme2a	sta (DUMMY_BYTE),y		; this hardcoded reference will be modified
+
+		dey						; update star's screen column
+		tya
+		bne skip_respawn_star
+respawn_star
+		lda #38					; respawn star at the right of the screen
+		ldy #38
+skip_respawn_star		
+		sta star_positions_white,x
 		
-		lda #$20 				; clear current star's position with a space
-star_1	ldx #13					; star start pos, will be modified by code
-		sta screen_ram_row_0, x
+		lda star_char_1
+modme2b	sta (DUMMY_BYTE),y 		; this hardcoded reference will be modified
+		dec modme2a+1			; self-modifying code: point to next star's data 
+		dec modme2a+1			; self-modifying code: point to next star's data 
+		dec modme2a+1			; self-modifying code: point to next star's data 
+		dec modme2b+1			; self-modifying code: point to next star's data 
+		dec modme2b+1			; self-modifying code: point to next star's data 
+		dec modme2b+1			; self-modifying code: point to next star's data 
+		
+		dex						; TODO eliminate
 		dex
-		bne skip_reset_star_1
-		ldx #25					; screen width
-skip_reset_star_1		
-		stx star_1+1			; self-modifying code
-		lda star_char_1			; 
-		sta screen_ram_row_0, x ; TODO do this with invariant y = #$20?
+		dex
+		bpl next_star
+		
 skip_shift_bg_chars
-
 		
 int_handler_wrapup		
         asl $d019    			; ACK interrupt (to re-enable it)		
@@ -354,23 +370,29 @@ bullet_data
 		.byte %00000000,%00000000,%00000000
 		.byte %00000000,%00000000,%00000000
 		.byte %00000000,%00000000,%00000000
-		.byte %00111111,%11100000,%00000000
-		.byte %00111111,%11100000,%00000000
+		.byte %11111111,%11100000,%00000000
+		.byte %11111111,%11100000,%00000000
 		.byte %00000000,%00000000,%00000000
 		.byte %00000000,%00000000,%00000000
 
-
-num_stars_white = 5		
-
+		
+zero_page_data_src
+		.byte $19, $79			; dummy, variable store
+star_positions_white_src		; (screen ram position in col 0, x offset)
+		.word $0400
+		.byte 10
+		.word $0428
+		.byte 12
+		.word $0450
+		.byte 14
+		.word $0478
+		.byte 16
+		.word $04a0
+		.byte 18
+zero_page_data_src_end
+		
 star_char_1
 		.screen "."
-
-star_char_2
-		.screen "*"
-
-star_positions_white
-		.word $1, $92, $200, $300, $400
-		
 
 		
 spr0_ptr = $07f8
@@ -397,6 +419,8 @@ screen_size_x_px = 320
 screen_ram = $0400
 screen_ram_size = 40*25
 color_ram = $d800		
+
+scroll_x = $d016
 
 joystick_1 = $dc01
 joystick_2 = $dc00
