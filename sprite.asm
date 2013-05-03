@@ -30,7 +30,6 @@
 		sta $d021
 		jsr $e544				; clear screen
 
-
 		ldx #$ff
 		lda #white
 init_color_ram
@@ -51,9 +50,9 @@ init_color_ram_last_chunk
 ;;; draw a simple static star field
 ;;; -----------------------------------------------------------------------------
 		
-drawstars
+draw_static_stars
 		lda star_char_1			; draw a basic static star field
-		ldy #white
+		ldy #dark_grey
 		sta screen_ram + 0
 		sty color_ram + 0
 		sta screen_ram + $92
@@ -101,23 +100,18 @@ fill_spr2
 
 
 		
-		lda #$70 				;  set x and y for sprite 0
+		lda #$70 				;  set x and y for sprite 0 (enemy)
 		sta spr0_x	
-		lda #0 				
+		lda #100			
 		sta spr0_y
+		lda #magenta
+		sta spr0_col			
 
-		lda #$70 				;  set x and y for sprite 1
+		lda #30  				;  set x and y for sprite 1 (player)
 		sta spr1_x 				
 		lda #$e0 				
 		sta spr1_y
-
-		sta spr2_x 				;  set x and y for sprite 1
-		sta spr2_y
-
-		lda #magenta			; enemy
-		sta spr0_col			
-
-		lda #grey				; player
+		lda #grey
 		sta spr1_col			
 
 		lda #cyan				; bullets
@@ -137,15 +131,24 @@ loopje
 
 int_handler		     			; we do our work here	
 
-		inc spr0_y
-		inc spr0_y
+		dec spr0_x
+		dec spr0_x
 		
 		lda %00000100			; are there bullets onscreen?
 		bit spr_enable			
 		beq respawn_bullets_maybe
 move_bullet
-		dec spr2_y				; update bullet position
-		bne skip_stop_bullets
+		inc spr2_x				; update bullet position
+		beq stop_bullets
+		inc spr2_x				; update bullet position
+		beq stop_bullets
+		inc spr2_x				; update bullet position
+		beq stop_bullets
+		inc spr2_x				; update bullet position
+		beq stop_bullets
+		inc spr2_x				; update bullet position
+		beq stop_bullets
+		jmp skip_stop_bullets
 stop_bullets
 		lda #%11111011			; disable bullet sprite
 		and spr_enable
@@ -171,18 +174,18 @@ respawn_bullets_maybe
 		lda #$00
 		sta $d021
 
-skip_respawn_bullets
+skip_respawn_bullets		
 		
-		lda #8					; TODO should be #8 i think -- joystick right?
+		lda #2					; read joystick and update player position
 		bit joystick_1
-		bne skip_move_player_right
-		inc spr1_x
-skip_move_player_right
-		lda #4					; joystick left?
+		bne skip_move_player_down
+		inc spr1_y
+skip_move_player_down
+		lda #1
 		bit joystick_1
-		bne skip_move_player_left
-		dec spr1_x
-skip_move_player_left
+		bne skip_move_player_up
+		dec spr1_y
+skip_move_player_up
 
 		
 		;; update star field
@@ -192,17 +195,6 @@ screen_ram_row_0_plus_1 = (screen_ram + (4*40) + 1)
 color_ram_row_0 = color_ram + (4*40)
 color_ram_row_0_plus_1 = (color_ram + (4*40) + 1)
 		
-;; 		lda star_char_1
-;; star_1	ldx #13					; star start pos, will be modified by code
-;; 		sta screen_ram_row_0, x ; draw star
-;; 		lda #$20				; space char to clear star's position
-;; 		sta screen_ram_row_0_plus_1, x ; TODO do this with invariant y = #$20?
-;; 		dex
-;; 		bne skip_reset_star_1
-;; 		ldx #25					; screen width
-;; skip_reset_star_1		
-;; 		stx star_1+1			; self-modifying code
-
 		lda #$20 				; clear current star's position with a space
 star_1	ldx #13					; star start pos, will be modified by code
 		sta screen_ram_row_0, x
@@ -290,26 +282,26 @@ enemy_data
 ship_data
 		.byte %00000000,%00000000,%00000000
 		.byte %00000000,%00000000,%00000000
-		.byte %00000000,%00011000,%00000000
-		.byte %00000000,%00011000,%00000000
-		.byte %00000000,%00011000,%00000000
-		.byte %00000000,%00011000,%00000000
-		.byte %00000000,%00011000,%00000000
-		.byte %00000000,%00011000,%00000000
-		.byte %00000000,%00011000,%00000000
-		.byte %00000000,%00111100,%00000000
-		.byte %00000000,%00111100,%00000000
-		.byte %00000000,%00111100,%00000000
-		.byte %00000000,%01111110,%00000000
-		.byte %00000000,%01111110,%00000000
-		.byte %00010000,%11111111,%00001000
-		.byte %00010000,%11100111,%00001000
-		.byte %00010011,%11100111,%11001000
-		.byte %00011111,%11100111,%11111000
-		.byte %00011111,%11100111,%11111000
-		.byte %00011111,%11111111,%11111000
-		.byte %00010000,%00011000,%00001000
-		
+		.byte %00000000,%00000000,%00000000
+		.byte %00000000,%00000000,%00000000
+		.byte %00000000,%00000000,%00000000
+		.byte %00000000,%00000000,%00000000
+		.byte %00000000,%00000000,%00000000
+		.byte %00000000,%00000000,%00000000
+		.byte %11000000,%00000000,%00000000
+		.byte %11100000,%00000000,%00000000
+		.byte %11110000,%00000000,%00000000
+		.byte %11111111,%11111100,%00000000
+		.byte %11111111,%11111111,%11111111
+		.byte %11111111,%11111111,%11111111
+		.byte %01111111,%11111111,%11111100
+		.byte %00001111,%11111111,%11000000
+		.byte %00111111,%10000000,%00000000
+		.byte %11111111,%11110000,%00000000
+		.byte %00000000,%00000000,%00000000
+		.byte %00000000,%00000000,%00000000
+		.byte %00000000,%00000000,%00000000
+
 bullet_data
 		.byte %00000000,%00000000,%00000000
 		.byte %00000000,%00000000,%00000000
@@ -325,11 +317,11 @@ bullet_data
 		.byte %00000000,%00000000,%00000000
 		.byte %00000000,%00000000,%00000000
 		.byte %00000000,%00000000,%00000000
-		.byte %00110000,%00000000,%00001100
-		.byte %00110000,%00000000,%00001100
-		.byte %00110000,%00000000,%00001100
-		.byte %00110000,%00000000,%00001100
-		.byte %00110000,%00000000,%00001100
+		.byte %00000000,%00000000,%00000000
+		.byte %00000000,%00000000,%00000000
+		.byte %00000000,%00000000,%00000000
+		.byte %00111111,%11100000,%00000000
+		.byte %00111111,%11100000,%00000000
 		.byte %00000000,%00000000,%00000000
 		.byte %00000000,%00000000,%00000000
 
@@ -366,6 +358,7 @@ spr_enable = $d015
 		
 spr_size_bytes = 3*21
 
+screen_size_x_px = 320
 screen_ram = $0400
 screen_ram_size = 40*25
 color_ram = $d800		
@@ -389,7 +382,7 @@ yellow = 7
 orange = 8
 brown = 9
 pink = 10
-dark = 11
+dark_grey = 11
 grey = 12
 light_green = 13
 light_blue = 14
