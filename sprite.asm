@@ -243,26 +243,41 @@ skip_enemy_hit
 
         
 ;;; -----------------------------------------------------------------------------
-;;; update star field
+;;; update star field using smooth scrolling over 8 px, or by moving chars
+;;; in screen ram if we've had all 8 px
 ;;; -----------------------------------------------------------------------------
+		
+		lda star_1_line			; left-shift the line in char_star_1 that has the star
+		clc
+		rol						; works if number of ROLs is even
+		rol
+		rol
+		rol
+		bcs move_bg_chars
+		sta star_1_line
+		jmp skip_move_bg_chars
+		
+;; smooth_scroll_using_scroll_reg
+;;         lda scroll_x            ; do optional smooth scrolling
+;;         and #%00000111
+;;         tax
+;;         dex
+;;         bmi move_bg_chars		; reset scroll reg and move chars in screen ram
+;;         lda scroll_x            ; smooth scroll 1 pixel to the left
+;;         and #%11111000
+;;         stx zero_page_temp_var
+;;         ora zero_page_temp_var      
+;;         sta scroll_x
+;;         jmp skip_move_bg_chars
 
-        lda scroll_x            ; do optional smooth scrolling
-        and #%00000111
-        tax
-        dex
-        bmi shift_bg_chars
-        lda scroll_x            ; smooth scroll 1 pixel to the left
-        and #%11111000
-        stx zero_page_temp_var
-        ora zero_page_temp_var      
-        sta scroll_x
-        jmp skip_shift_bg_chars
+move_bg_chars
 
-shift_bg_chars
+;;         lda #%00000111
+;;         ora scroll_x        
+;;         sta scroll_x
 
-        lda #%00000111
-        ora scroll_x        
-        sta scroll_x
+		rol						; rotate again to get carry into LSB
+		sta star_1_line		
         
         ldx #(num_stars_white)-1
 
@@ -284,8 +299,7 @@ respawn_star
         ldy #38
 skip_respawn_star       
         sta star_cols_white,x
-        
-        lda #char_star
+        lda #char_star_1
 dummyloc2
 		sta (DUMMY_BYTE),y      ; this hardcoded reference will be modified
         dec dummyloc1+1           ; self-modifying code: point DUMMY_BYTE 
@@ -295,9 +309,10 @@ dummyloc2
         
         dex
         bne next_star
-        
-skip_shift_bg_chars
+		
+skip_move_bg_chars
 
+		
 		lda #black
 		sta $d020
 
@@ -383,7 +398,8 @@ bullet_data
 
 
 char_empty 	= 0
-char_star 	= 1
+char_star_1	= 1
+star_1_line = char_mem + 8 + 4
 
 charset
 		.byte %00000000			; the void (perhaps just use #$20, space)
