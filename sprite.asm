@@ -36,21 +36,15 @@ DUMMY_BYTE = $00
 		sta $d021
 		jsr $e544				; clear screen
 
-		ldx #$ff
+		ldx #0
 		lda #blue
 init_color_ram
 		sta color_ram,x
 		sta color_ram+$100,x
         sta color_ram+$200,x
+        sta color_ram+$300,x	; this goes beyond color ram, but hey...
         dex
         bne init_color_ram
-        
-        ldx #$e8                ; clear last bit of screen from $300 to $3e8
-init_color_ram_last_chunk
-        sta color_ram+$300,x
-        dex
-        bne init_color_ram_last_chunk
-
         
 ;;; -----------------------------------------------------------------------------
 ;;; draw a simple static star field
