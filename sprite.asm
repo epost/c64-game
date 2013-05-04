@@ -30,10 +30,18 @@ DUMMY_BYTE = $00
 ;;; -----------------------------------------------------------------------------
 ;;; initialize the screen
 ;;; -----------------------------------------------------------------------------
-		
+
+        lda #%00010000			; set text mode, 24 rows, no extended color mode
+        sta $d011
+        ldx #$08				; single colour
+        stx $d016
+        ldy #$18				; put screen ram at $0400, charset at $2000
+        sty $d018
+
 		lda #0					; set black bg and fg
 		sta $d020
 		sta $d021
+
 		jsr $e544				; clear screen
 
 		ldx #0
@@ -59,7 +67,7 @@ copy_char
 
 
 ;;; -----------------------------------------------------------------------------
-;;; draw a simple static star field
+;;; prepare our zero page data store including the starfield data
 ;;; -----------------------------------------------------------------------------
         
         ldx #(zero_page_data_src_end - zero_page_data_src)
@@ -111,9 +119,36 @@ fill_spr0
         lda #%00000011          ; enable sprites 0 and 1 (enemy, player)
         sta spr_enable
 
-        jsr init_screen_for_raster_int
-loopje
-        jmp loopje
+		
+;;; -----------------------------------------------------------------------------
+;;; install raster interrupt handler
+;;; -----------------------------------------------------------------------------
+		
+        sei                     ; turn off interrupts
+        lda #$7f
+        ldx #$01
+        sta $dc0d               ; Turn off CIA 1 interrupts
+        sta $dd0d               ; Turn off CIA 2 interrupts
+        stx $d01a               ; Turn on raster interrupts
+
+        lda #<int_handler       ; set raster interrupt vector
+        ldx #>int_handler       
+        sta $0314               
+        stx $0315
+
+        ldy #$50                ; set scanline on which to trigger interrupt
+        sty $d012
+		lda $d011				; scanline hi bit
+		and #%01111111
+		sta $d011
+
+        lda $dc0d               ; ACK CIA 1 interrupts
+        lda $dd0d               ; ACK CIA 2 interrupts
+        asl $d019               ; ACK VIC interrupts
+        cli
+
+loop_pro_semper
+		jmp loop_pro_semper
 
 
 ;;; -----------------------------------------------------------------------------
@@ -238,11 +273,9 @@ shift_bg_chars
 next_star
 		lda star_cols_white,x   ; Y = star's screen column
         tay
-
         lda #char_empty			; clear star's old position with space char
 dummyloc1
 		sta (DUMMY_BYTE),y      ; this hardcoded reference will be modified
-
         dey                     ; update star's screen column
         tya
         bne skip_respawn_star
@@ -277,42 +310,6 @@ int_handler_wrapup
         tax
         pla
         rti                     ; return from interrupt
-
-
-;;; -----------------------------------------------------------------------------
-;;; adapted from http://ocaoimh.ie/wp-content/uploads/2008/01/intro-to-programming-c64-demos.html#SECTION00086000000000000000
-;;; -----------------------------------------------------------------------------
-        
-init_screen_for_raster_int
-
-        lda #$1b                ; clear hi bit of raster int scanline (lo is at $d012) and set text mode
-        sta $d011               
-        ldx #$08                ; single-colour
-        stx $d016               
-        ldy #$18                ; screen at $0400, charset at $2000
-        sty $d018               
-        
-install_raster_int
-        sei                     ; turn off interrupts
-        lda #$7f
-        ldx #$01
-        sta $dc0d               ; Turn off CIA 1 interrupts
-        sta $dd0d               ; Turn off CIA 2 interrupts
-        stx $d01a               ; Turn on raster interrupts
-
-        lda #<int_handler       ; set raster interrupt vector
-        ldx #>int_handler       
-        sta $0314               
-        stx $0315
-        ldy #$50                ; set scanline on which to trigger interrupt
-        sty $d012
-
-        lda $dc0d               ; ACK CIA 1 interrupts
-        lda $dd0d               ; ACK CIA 2 interrupts
-        asl $d019               ; ACK VIC interrupts
-        cli
-
-        rts
 
 sprite_data        
 enemy_data
