@@ -67,44 +67,32 @@ fill_star_data
 ;;; init sprites
 ;;; -----------------------------------------------------------------------------
 
-        lda #13                 ; sprite 0 starts at 13 * 64 = 832 = $0340
+        lda #13                 ; sprite 0 starts at 13 * 64
         sta spr0_ptr
+        lda #14                 ; sprite 1
+        sta spr1_ptr
+        lda #15                 ; sprite 2
+        sta spr2_ptr
+		
         ldx #spr_size_bytes
 fill_spr0
         lda enemy_data,x
         sta 13*64,x
+        lda ship_data,x
+        sta 14*64,x
+        lda bullet_data,x
+        sta 15*64,x
         dex
         bne fill_spr0
         
-
-        lda #14                 ; sprite 1 starts at address 14 * 64
-        sta spr1_ptr
-        ldx #0                  ; copy sprite 1 data
-fill_spr1   
-        lda ship_data,x
-        sta 14*64,x
-        inx
-        cpx #spr_size_bytes
-        bne fill_spr1
-
-        lda #9                  ; sprite 2 starts at address 15 * 64
-        sta spr2_ptr
-        ldx #0                  ; copy sprite 2 data
-fill_spr2
-        lda bullet_data,x
-        sta 9*64,x
-        inx
-        cpx #spr_size_bytes
-        bne fill_spr2       
-        
-        lda #$70                ;  set x and y for sprite 0 (enemy)
+        lda #$70                ; set x and y for sprite 0 (enemy)
         sta spr0_x  
         lda #100            
         sta spr0_y
         lda #magenta
         sta spr0_col            
 
-        lda #30                 ;  set x and y for sprite 1 (player)
+        lda #30                 ; set x and y for sprite 1 (player)
         sta spr1_x              
         lda #$e0                
         sta spr1_y
@@ -319,7 +307,7 @@ install_raster_int
 message
         .null "(c) 2013 lemon/shinsetsu"
 
-        
+sprite_data        
 enemy_data
         .byte %00000000,%00000000,%00000000
         .byte %00000000,%11111111,%00000000
