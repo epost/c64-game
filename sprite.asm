@@ -7,8 +7,8 @@
 		
 zero_page_store = $04
 zero_page_temp_var	= zero_page_store
-star_positions_white = zero_page_store +2
 num_stars_white = 13
+star_positions_white = zero_page_store +2
 star_row_adrs_white_end = (star_positions_white + (num_stars_white*2)) -2
 star_cols_white = star_positions_white + (num_stars_white*2)
 		
@@ -69,12 +69,11 @@ fill_star_data
 
         lda #13                 ; sprite 0 starts at 13 * 64 = 832 = $0340
         sta spr0_ptr
-        ldx #0
+        ldx #spr_size_bytes
 fill_spr0
         lda enemy_data,x
         sta 13*64,x
-        inx
-        cpx #spr_size_bytes
+        dex
         bne fill_spr0
         
 
@@ -129,6 +128,10 @@ loopje
 
 int_handler                     ; we do our work here   
 
+		lda #yellow
+		sta $d020
+
+		
         dec spr0_x
         dec spr0_x
         
@@ -136,15 +139,25 @@ int_handler                     ; we do our work here
         bit spr_enable          
         beq respawn_bullets_maybe
 move_bullet
-        inc spr2_x              ; update bullet position
+        inc spr2_x
         beq stop_bullets
-        inc spr2_x              ; update bullet position
+        inc spr2_x
         beq stop_bullets
-        inc spr2_x              ; update bullet position
+        inc spr2_x
         beq stop_bullets
-        inc spr2_x              ; update bullet position
+        inc spr2_x
         beq stop_bullets
-        inc spr2_x              ; update bullet position
+        inc spr2_x
+        beq stop_bullets
+        inc spr2_x
+        beq stop_bullets
+        inc spr2_x
+        beq stop_bullets
+        inc spr2_x
+        beq stop_bullets
+        inc spr2_x
+        beq stop_bullets
+        inc spr2_x
         beq stop_bullets
         jmp skip_stop_bullets
 stop_bullets
@@ -221,15 +234,16 @@ shift_bg_chars
         ldx #(num_stars_white)-1
 
         ldy #star_row_adrs_white_end    ; self-modifying code: reset hardcoded pointers to end of table
-        sty modme2a+1           
-        sty modme2b+1           
+        sty dummyloc1+1           
+        sty dummyloc2+1           
         
 next_star
-modme1  lda star_cols_white,x   ; Y = star's screen column
+		lda star_cols_white,x   ; Y = star's screen column
         tay
 
         lda #$20                ; clear star's old position with space char
-modme2a sta (DUMMY_BYTE),y      ; this hardcoded reference will be modified
+dummyloc1
+		sta (DUMMY_BYTE),y      ; this hardcoded reference will be modified
 
         dey                     ; update star's screen column
         tya
@@ -241,17 +255,22 @@ skip_respawn_star
         sta star_cols_white,x
         
         lda star_char_1
-modme2b sta (DUMMY_BYTE),y      ; this hardcoded reference will be modified
-        dec modme2a+1           ; self-modifying code: point to next star's data 
-        dec modme2a+1           ; self-modifying code: point to next star's data 
-        dec modme2b+1           ; self-modifying code: point to next star's data 
-        dec modme2b+1           ; self-modifying code: point to next star's data 
+dummyloc2
+		sta (DUMMY_BYTE),y      ; this hardcoded reference will be modified
+        dec dummyloc1+1           ; self-modifying code: point DUMMY_BYTE 
+        dec dummyloc1+1           ; to next star's data 
+        dec dummyloc2+1           
+        dec dummyloc2+1           
         
-        dex                     ; TODO eliminate
+        dex
         bne next_star
         
 skip_shift_bg_chars
-        
+
+		lda #black
+		sta $d020
+
+		
 int_handler_wrapup      
         asl $d019               ; ACK interrupt (to re-enable it)       
         pla
@@ -287,7 +306,7 @@ install_raster_int
         ldx #>int_handler       
         sta $0314               
         stx $0315
-        ldy #$80                ; set scanline on which to trigger interrupt
+        ldy #$50                ; set scanline on which to trigger interrupt
         sty $d012
 
         lda $dc0d               ; ACK CIA 1 interrupts
@@ -363,11 +382,11 @@ bullet_data
         .byte %00000000,%00000000,%00000000
         .byte %00000000,%00000000,%00000000
         .byte %00000000,%00000000,%00000000
-        .byte %00000000,%00000000,%00000000
-        .byte %00000000,%00000000,%00000000
-        .byte %00000000,%11111111,%11100000
-		.byte %00000000,%11111111,%11100000
-		.byte %00000000,%00000000,%00000000
+        .byte %00000000,%10000000,%00000000
+        .byte %00000000,%00000011,%10000000
+        .byte %10101100,%01111111,%11100000
+        .byte %00000000,%00000000,%10000000
+		.byte %00001100,%00000000,%00000000
 		.byte %00000000,%00000000,%00000000
 
 		
@@ -392,7 +411,7 @@ star_row_adrs_white_src
 star_cols_white_src
 		.byte 4
 		.byte 5
-		.byte 5
+		.byte 23
 		.byte 8
 		.byte 11
 		.byte 7
@@ -401,7 +420,7 @@ star_cols_white_src
 		.byte 3
 		.byte 25
 		.byte 10
-		.byte 5
+		.byte 18
 		.byte 16
 		.byte 20		
 		
