@@ -126,7 +126,7 @@ loopje
 ;;; main loop, implemented as a raster interrupt handler
 ;;; -----------------------------------------------------------------------------
 
-int_handler                     ; we do our work here   
+int_handler
 
 		lda #yellow
 		sta $d020
