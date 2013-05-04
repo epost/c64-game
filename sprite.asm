@@ -7,10 +7,15 @@
 		
 zero_page_store = $04
 zero_page_temp_var	= zero_page_store
-num_stars_white = 13
+num_stars_white = 14
+num_stars_back = 14
 star_positions_white = zero_page_store +2
 star_row_adrs_white_end = (star_positions_white + (num_stars_white*2)) -2
 star_cols_white = star_positions_white + (num_stars_white*2)
+
+star_positions_back = zero_page_store + 2 + (num_stars_white*3)
+star_row_adrs_back_end = (star_positions_back + (num_stars_back*2)) -2
+star_cols_back = star_positions_back + (num_stars_back*2)
 		
 DUMMY_BYTE = $00
 		
@@ -54,7 +59,7 @@ init_color_ram
         dex
         bne init_color_ram
 
-		lda #2 					; how many chars to copy
+		lda #num_custom_chars	; how many chars to copy
 		rol						; x=8*a for 8 bytes per char
 		rol
 		rol
@@ -249,13 +254,16 @@ skip_enemy_hit
 		
 		lda star_1_line			; left-shift the line in char_star_1 that has the star
 		clc
-		rol						; works if number of ROLs is even
+		rol						; works if number of ROLs is 1 or even
 		rol
 		rol
 		rol
 		bcs move_bg_chars
 		sta star_1_line
 		jmp skip_move_bg_chars
+
+
+
 		
 ;; smooth_scroll_using_scroll_reg
 ;;         lda scroll_x            ; do optional smooth scrolling
@@ -309,10 +317,73 @@ dummyloc2
         
         dex
         bne next_star
-		
+
+
 skip_move_bg_chars
 
+;; jmp skip_move_bg_chars_BACK		
+;;; *****************************************************************
+;;; *****************************************************************
+;;; *****************************************************************
+;;; *****************************************************************
+
+
+		lda star_back_line		; left-shift the line in char_star_1 that has the star
+		clc
+		rol						; works if number of ROLs is even
+		bcs move_bg_chars_BACK
+		sta star_back_line
+		jmp skip_move_bg_chars_BACK
 		
+move_bg_chars_BACK
+		rol						; rotate again to get carry into LSB
+		sta star_back_line		
+        
+        ldx #(num_stars_back)-1
+
+        ldy #star_row_adrs_back_end    ; self-modifying code: reset hardcoded pointers to end of table
+        sty dummyloc1_BACK+1           
+        sty dummyloc2_BACK+1           
+        
+next_star_BACK
+		lda star_cols_back,x   ; Y = star's screen column
+        tay
+        lda #char_empty			; clear star's old position with space char
+dummyloc1_BACK
+		sta (DUMMY_BYTE),y      ; this hardcoded reference will be modified
+        dey                     ; update star's screen column
+        tya
+        bne skip_respawn_star_BACK
+respawn_star_BACK
+        lda #38                 ; respawn star at the right of the screen
+        ldy #38
+skip_respawn_star_BACK       
+        sta star_cols_back,x
+        lda #char_star_back
+dummyloc2_BACK
+		sta (DUMMY_BYTE),y      ; this hardcoded reference will be modified
+        dec dummyloc1_BACK+1    ; self-modifying code: point DUMMY_BYTE 
+        dec dummyloc1_BACK+1    ; to next star's data 
+        dec dummyloc2_BACK+1           
+        dec dummyloc2_BACK+1           
+        
+        dex
+        bne next_star_BACK
+
+
+
+		
+skip_move_bg_chars_BACK
+		
+;;; ********************************************************************
+;;; *****************************************************************
+;;; *****************************************************************
+
+
+
+
+
+				
 		lda #black
 		sta $d020
 
@@ -397,9 +468,12 @@ bullet_data
 		.byte %00000000,%00000000,%00000000
 
 
+num_custom_chars = 3
 char_empty 	= 0
 char_star_1	= 1
 star_1_line = char_mem + 8 + 4
+char_star_back = 2
+star_back_line = char_mem + (2*8) + 4
 
 charset
 		.byte %00000000			; the void (perhaps just use #$20, space)
@@ -411,7 +485,16 @@ charset
 		.byte %00000000
 		.byte %00000000
 
-		.byte %00000000 		; a one-pixel star
+		.byte %00000000 		; a one-pixel star (char_star_1)
+		.byte %00000000
+		.byte %00000000
+		.byte %00000000
+		.byte %00000001
+		.byte %00000000
+		.byte %00000000
+		.byte %00000000
+
+		.byte %00000000 		; a one-pixel star (char_star_back)
 		.byte %00000000
 		.byte %00000000
 		.byte %00000000
@@ -427,6 +510,7 @@ charset
 		
 zero_page_data_src
 		.byte $19, $79			; dummy, variable store
+		
 star_row_adrs_white_src
 		.word $798
 		.word $5e0
@@ -444,6 +528,38 @@ star_row_adrs_white_src
 		.word $4f0
 		
 star_cols_white_src
+		.byte 4
+		.byte 5
+		.byte 23
+		.byte 8
+		.byte 11
+		.byte 7
+		.byte 13
+		.byte 8
+		.byte 3
+		.byte 25
+		.byte 10
+		.byte 18
+		.byte 16
+		.byte 20		
+
+star_row_adrs_back_src
+		.word $7c0
+		.word $630
+		.word $568
+		.word $5e0
+		.word $658
+		.word $748
+		.word $748
+		.word $720
+		.word $6a8
+		.word $5b8
+		.word $608
+		.word $658
+		.word $4c8
+		.word $4f0
+		
+star_cols_back_src
 		.byte 4
 		.byte 5
 		.byte 23
