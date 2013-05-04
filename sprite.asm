@@ -37,7 +37,7 @@ DUMMY_BYTE = $00
 		jsr $e544				; clear screen
 
 		ldx #0
-		lda #blue
+		lda #light_blue
 init_color_ram
 		sta color_ram,x
 		sta color_ram+$100,x
@@ -45,7 +45,19 @@ init_color_ram
         sta color_ram+$300,x	; this goes beyond color ram, but hey...
         dex
         bne init_color_ram
-        
+
+		lda #2 					; how many chars to copy
+		rol						; x=8*a for 8 bytes per char
+		rol
+		rol
+		tax
+copy_char
+		lda charset,x
+		sta char_mem,x
+		dex
+		bne copy_char
+
+
 ;;; -----------------------------------------------------------------------------
 ;;; draw a simple static star field
 ;;; -----------------------------------------------------------------------------
@@ -227,7 +239,7 @@ next_star
 		lda star_cols_white,x   ; Y = star's screen column
         tay
 
-        lda #$20                ; clear star's old position with space char
+        lda #char_empty			; clear star's old position with space char
 dummyloc1
 		sta (DUMMY_BYTE),y      ; this hardcoded reference will be modified
 
@@ -240,7 +252,7 @@ respawn_star
 skip_respawn_star       
         sta star_cols_white,x
         
-        lda star_char_1
+        lda #char_star
 dummyloc2
 		sta (DUMMY_BYTE),y      ; this hardcoded reference will be modified
         dec dummyloc1+1           ; self-modifying code: point DUMMY_BYTE 
@@ -277,7 +289,7 @@ init_screen_for_raster_int
         sta $d011               
         ldx #$08                ; single-colour
         stx $d016               
-        ldy #$14                ; screen at $0400, charset at $2000
+        ldy #$18                ; screen at $0400, charset at $2000
         sty $d018               
         
 install_raster_int
@@ -301,9 +313,6 @@ install_raster_int
         cli
 
         rts
-
-message
-        .null "(c) 2013 lemon/shinsetsu"
 
 sprite_data        
 enemy_data
@@ -375,6 +384,33 @@ bullet_data
 		.byte %00000011,%00000000,%00000000
 		.byte %00000000,%00000000,%00000000
 
+
+char_empty 	= 0
+char_star 	= 1
+
+charset
+		.byte %00000000			; the void (perhaps just use #$20, space)
+		.byte %00000000
+		.byte %00000000
+		.byte %00000000
+		.byte %00000000
+		.byte %00000000
+		.byte %00000000
+		.byte %00000000
+
+		.byte %00000000 		; a one-pixel star
+		.byte %00000000
+		.byte %00000000
+		.byte %00000000
+		.byte %00000001
+		.byte %00000000
+		.byte %00000000
+		.byte %00000000
+
+
+;;; -----------------------------------------------------------------------------
+;;; data store to be copied to zero page
+;;; -----------------------------------------------------------------------------
 		
 zero_page_data_src
 		.byte $19, $79			; dummy, variable store
@@ -411,11 +447,7 @@ star_cols_white_src
 		.byte 20		
 		
 zero_page_data_src_end
-		
-star_char_1
-		.screen "."
 
-		
 spr0_ptr = $07f8
 spr0_x = $d000
 spr0_y = $d001
@@ -440,6 +472,7 @@ screen_size_x_px = 320
 screen_ram = $0400
 screen_ram_size = 40*25
 color_ram = $d800		
+char_mem = $2000
 
 scroll_x = $d016
 
@@ -462,8 +495,3 @@ grey = 12
 light_green = 13
 light_blue = 14
 light_grey = 15
-
-
-;;; kernal routines
-		
-CHROUT  = $ffd2          
