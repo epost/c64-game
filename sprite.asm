@@ -147,6 +147,10 @@ move_bullet
         beq stop_bullets
         inc spr2_x
         beq stop_bullets
+        inc spr2_x
+        beq stop_bullets
+        inc spr2_x
+        beq stop_bullets
         jmp skip_stop_bullets
 stop_bullets
         lda #%11111011          ; disable bullet sprite
@@ -374,7 +378,7 @@ bullet_data
         .byte %00000000,%00000011,%10000000
         .byte %10101100,%01111111,%11100000
         .byte %00000000,%00000000,%10000000
-		.byte %00001100,%00000000,%00000000
+		.byte %00000011,%00000000,%00000000
 		.byte %00000000,%00000000,%00000000
 
 		
