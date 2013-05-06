@@ -5,14 +5,14 @@
 ;;; (c) 2013 Erik / SHINSETSU
 ;;; -----------------------------------------------------------------------------
 		
-zero_page_store = $04
-zero_page_temp_var	= zero_page_store
-num_stars_white = 14
-star_positions_white = zero_page_store +2
-star_row_adrs_white_end = (star_positions_white + (num_stars_white*2)) -2
-star_cols_white = star_positions_white + (num_stars_white*2)
+zero_page_store			= $04
+zero_page_temp_var		= zero_page_store
+num_stars_white			= 14
+star_positions_white	= zero_page_store +2
+star_row_adrs_white_end	= star_positions_white + (num_stars_white*2) -2
+star_cols_white 		= star_row_adrs_white_end + 2
 		
-DUMMY_BYTE = $00
+DUMMY_BYTE				= $00
 		
 ;;; -----------------------------------------------------------------------------
 ;;; BASIC loader using SYS 2064
