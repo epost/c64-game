@@ -8,14 +8,9 @@
 zero_page_store = $04
 zero_page_temp_var	= zero_page_store
 num_stars_white = 14
-num_stars_back = 14
 star_positions_white = zero_page_store +2
 star_row_adrs_white_end = (star_positions_white + (num_stars_white*2)) -2
 star_cols_white = star_positions_white + (num_stars_white*2)
-
-star_positions_back = zero_page_store + 2 + (num_stars_white*3)
-star_row_adrs_back_end = (star_positions_back + (num_stars_back*2)) -2
-star_cols_back = star_positions_back + (num_stars_back*2)
 		
 DUMMY_BYTE = $00
 		
@@ -30,7 +25,7 @@ DUMMY_BYTE = $00
 .byte $00,$00,$00,$00
 
 		
-* = $0810
+* = $0810 						; 2064 decimal
 
 ;;; -----------------------------------------------------------------------------
 ;;; initialize the screen
@@ -46,31 +41,46 @@ DUMMY_BYTE = $00
 		lda #0					; set black bg and fg
 		sta $d020
 		sta $d021
-
 		jsr $e544				; clear screen
 
-		ldx #0
-		lda #light_blue
-init_color_ram
-		sta color_ram,x
-		sta color_ram+$100,x
-        sta color_ram+$200,x
-        sta color_ram+$300,x	; this goes beyond color ram, but hey...
-        dex
-        bne init_color_ram
-
-		lda #num_custom_chars	; how many chars to copy
-		rol						; x=8*a for 8 bytes per char
-		rol
-		rol
-		tax
+		
+		ldx #$ff
 copy_char
 		lda charset,x
 		sta char_mem,x
+		lda charset+$100,x
+		sta char_mem+$100,x
+		lda charset+$200,x
+		sta char_mem+$200,x
+		lda charset+$300,x
+		sta char_mem+$300,x
 		dex
 		bne copy_char
 
 
+		lda #white
+		jsr fill_color_ram
+
+
+		ldx #0
+print		
+		lda msg_signature,x
+		beq print_done
+		sta screen_ram+(11*40)+10,x
+		inx
+		jmp print
+print_done
+
+await_fire_btn		
+        lda #16                 ; fire button pressed?
+        bit joystick_1
+        bne await_fire_btn
+		jsr $e544				; clear screen
+
+		lda #light_blue
+		jsr fill_color_ram
+		
+		
 ;;; -----------------------------------------------------------------------------
 ;;; prepare our zero page data store including the starfield data
 ;;; -----------------------------------------------------------------------------
@@ -141,7 +151,7 @@ fill_spr0
         sta $0314               
         stx $0315
 
-        ldy #$50                ; set scanline on which to trigger interrupt
+        ldy #$0                 ; set scanline on which to trigger interrupt
         sty $d012
 		lda $d011				; scanline hi bit
 		and #%01111111
@@ -152,6 +162,7 @@ fill_spr0
         asl $d019               ; ACK VIC interrupts
         cli
 
+		
 loop_pro_semper
 		jmp loop_pro_semper
 
@@ -162,10 +173,12 @@ loop_pro_semper
 
 int_handler
 
-		lda #yellow
-		sta $d020
+		;; lda #yellow
+		;; sta $d020
 
 		
+        dec spr0_x				; update enemy position
+        dec spr0_x
         dec spr0_x
         dec spr0_x
         
@@ -242,6 +255,8 @@ skip_move_player_up
         cmp spr_spr_collision
         bne skip_enemy_hit
         inc spr0_col
+		lda #$ff
+		sta spr0_x
         lda #%11111011          ; disable bullet sprite
         and spr_enable
         sta spr_enable
@@ -254,16 +269,6 @@ skip_enemy_hit
 ;;; in screen ram if we've had all 8 px
 ;;; -----------------------------------------------------------------------------
 		
-		lda star_1_line			; left-shift the line in char_star_1 that has the star
-		clc
-		rol						; works if number of ROLs is 1 or even
-		rol
-		rol
-		rol
-		bcs move_bg_chars
-		sta star_1_line
-		jmp skip_move_bg_chars
-
 
 
 		
@@ -279,28 +284,66 @@ skip_enemy_hit
 ;;         ora zero_page_temp_var      
 ;;         sta scroll_x
 ;;         jmp skip_move_bg_chars
-
-move_bg_chars
-
+;; 
+;; move_bg_chars
+;; 
 ;;         lda #%00000111
 ;;         ora scroll_x        
 ;;         sta scroll_x
+;;
+;;         ;; ... do actual screen ram copying / moving here ...
+;;
+;; skip_move_bg_chars
 
+
+		
+;;; -----------------------------------------------------------------------------
+;;; macro: scroll a single layer of the star field
+;;; -----------------------------------------------------------------------------
+
+SCROLL_STARS .macro
+
+star_positions 	= \1
+char_star 		= \2
+num_rols		= \3
+		
+num_stars				= 14
+star_row_adrs_end		= star_positions + (num_stars*2) -2
+star_cols 				= star_row_adrs_end +2
+char_star_moving_row	= char_mem + (char_star*8) + 4
+		
+		
+		lda char_star_moving_row; left-shift the line in char_star_1 that has the star
+		clc
+
+rol_i	.var num_rols			; rotate the star a given number of ROLs
+do_rol	.lbl
+		rol						; works if number of ROLs is even
+rol_i	.var rol_i-1
+		.ifne rol_i
+		.goto do_rol
+		.endif
+
+		bcs move_chars
+		sta char_star_moving_row
+		jmp scroll_stars_done
+		
+move_chars
 		rol						; rotate again to get carry into LSB
-		sta star_1_line		
+		sta char_star_moving_row		
         
-        ldx #(num_stars_white)-1
+        ldx #(num_stars)-1
 
-        ldy #star_row_adrs_white_end    ; self-modifying code: reset hardcoded pointers to end of table
-        sty dummyloc1+1           
-        sty dummyloc2+1           
+        ldy #star_row_adrs_end	; self-modifying code: reset hardcoded pointers to end of table
+        sty screen_ptr_adr_1+1           
+        sty screen_ptr_adr_2+1           
         
 next_star
-		lda star_cols_white,x   ; Y = star's screen column
+		lda star_cols,x			; Y = star's screen column
         tay
         lda #char_empty			; clear star's old position with space char
-dummyloc1
-		sta (DUMMY_BYTE),y      ; this hardcoded reference will be modified
+screen_ptr_adr_1
+		sta (DUMMY_BYTE),y      ; hardcoded ptr into screen ram, will be modified
         dey                     ; update star's screen column
         tya
         bne skip_respawn_star
@@ -308,86 +351,26 @@ respawn_star
         lda #38                 ; respawn star at the right of the screen
         ldy #38
 skip_respawn_star       
-        sta star_cols_white,x
-        lda #char_star_1
-dummyloc2
-		sta (DUMMY_BYTE),y      ; this hardcoded reference will be modified
-        dec dummyloc1+1           ; self-modifying code: point DUMMY_BYTE 
-        dec dummyloc1+1           ; to next star's data 
-        dec dummyloc2+1           
-        dec dummyloc2+1           
+        sta star_cols,x
+        lda #char_star
+screen_ptr_adr_2
+		sta (DUMMY_BYTE),y		; hardcoded ptr into screen ram, will be modified
+        dec screen_ptr_adr_1+1	; self-modifying code: point DUMMY_BYTE 
+        dec screen_ptr_adr_1+1	; to next star's data 
+        dec screen_ptr_adr_2+1           
+        dec screen_ptr_adr_2+1           
         
         dex
         bne next_star
 
+scroll_stars_done
 
-skip_move_bg_chars
+.endm
 
-;; jmp skip_move_bg_chars_BACK		
-;;; *****************************************************************
-;;; *****************************************************************
-;;; *****************************************************************
-;;; *****************************************************************
+star_positions_back_GL = zero_page_store + 2 + (num_stars_white*3)
 
-
-		lda star_back_line		; left-shift the line in char_star_1 that has the star
-		clc
-		rol						; works if number of ROLs is even
-		bcs move_bg_chars_BACK
-		sta star_back_line
-		jmp skip_move_bg_chars_BACK
-		
-move_bg_chars_BACK
-		rol						; rotate again to get carry into LSB
-		sta star_back_line		
-        
-        ldx #(num_stars_back)-1
-
-        ldy #star_row_adrs_back_end    ; self-modifying code: reset hardcoded pointers to end of table
-        sty dummyloc1_BACK+1           
-        sty dummyloc2_BACK+1           
-        
-next_star_BACK
-		lda star_cols_back,x   ; Y = star's screen column
-        tay
-        lda #char_empty			; clear star's old position with space char
-dummyloc1_BACK
-		sta (DUMMY_BYTE),y      ; this hardcoded reference will be modified
-        dey                     ; update star's screen column
-        tya
-        bne skip_respawn_star_BACK
-respawn_star_BACK
-        lda #38                 ; respawn star at the right of the screen
-        ldy #38
-skip_respawn_star_BACK       
-        sta star_cols_back,x
-        lda #char_star_back
-dummyloc2_BACK
-		sta (DUMMY_BYTE),y      ; this hardcoded reference will be modified
-        dec dummyloc1_BACK+1    ; self-modifying code: point DUMMY_BYTE 
-        dec dummyloc1_BACK+1    ; to next star's data 
-        dec dummyloc2_BACK+1           
-        dec dummyloc2_BACK+1           
-        
-        dex
-        bne next_star_BACK
-
-
-
-		
-skip_move_bg_chars_BACK
-		
-;;; ********************************************************************
-;;; *****************************************************************
-;;; *****************************************************************
-
-
-
-
-
-				
-		lda #black
-		sta $d020
+		#SCROLL_STARS star_positions_white, char_star_1, 2
+		#SCROLL_STARS star_positions_back_GL, char_star_back, 1
 
 		
 int_handler_wrapup      
@@ -399,6 +382,22 @@ int_handler_wrapup
         pla
         rti                     ; return from interrupt
 
+
+;;; -----------------------------------------------------------------------------
+;;; subroutine to set the screen color to the value of A
+;;; -----------------------------------------------------------------------------
+
+		ldx #0
+fill_color_ram
+		sta color_ram,x
+		sta color_ram+$100,x
+        sta color_ram+$200,x
+        sta color_ram+$300,x	; this goes beyond color ram, but hey...
+        dex
+        bne fill_color_ram
+		rts
+
+		
 sprite_data        
 enemy_data
         .byte %00000000,%00000000,%00000000
@@ -470,24 +469,15 @@ bullet_data
 		.byte %00000000,%00000000,%00000000
 
 
-num_custom_chars = 3
-char_empty 	= 0
-char_star_1	= 1
-star_1_line = char_mem + 8 + 4
-char_star_back = 2
-star_back_line = char_mem + (2*8) + 4
+char_empty 	= " "
+char_star_1	= 64 				; screen code
+star_1_line = char_mem + (char_star_1*8) + 4
+char_star_back = 65				; screen code
 
-charset
-		.byte %00000000			; the void (perhaps just use #$20, space)
-		.byte %00000000
-		.byte %00000000
-		.byte %00000000
-		.byte %00000000
-		.byte %00000000
-		.byte %00000000
-		.byte %00000000
-
-		.byte %00000000 		; a one-pixel star (char_star_1)
+charset	
+		.include "font-8x8.lff.asm"		; the regular character font
+		
+		.byte %00000000 		; tile: a one-pixel star (char_star_1)
 		.byte %00000000
 		.byte %00000000
 		.byte %00000000
@@ -496,7 +486,7 @@ charset
 		.byte %00000000
 		.byte %00000000
 
-		.byte %00000000 		; a one-pixel star (char_star_back)
+		.byte %00000000 		; tile: a one-pixel star (char_star_back)
 		.byte %00000000
 		.byte %00000000
 		.byte %00000000
@@ -505,6 +495,9 @@ charset
 		.byte %00000000
 		.byte %00000000
 
+msg_signature		
+.screen "(c) 2013 lemon/r&r"
+.byte 0
 
 ;;; -----------------------------------------------------------------------------
 ;;; data store to be copied to zero page
