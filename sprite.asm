@@ -7,11 +7,21 @@
 		
 zero_page_store			= $04
 zero_page_temp_var		= zero_page_store
-num_stars_white			= 14
-star_positions_white	= zero_page_store +2
-star_row_adrs_white_end	= star_positions_white + (num_stars_white*2) -2
-star_cols_white 		= star_row_adrs_white_end + 2
-		
+num_stars_front			= 14
+star_positions_front	= zero_page_store +2
+star_row_adrs_front_end	= star_positions_front + (num_stars_front*2) -2
+star_cols_front 		= star_row_adrs_front_end + 2
+star_kleurtjes_front	= star_cols_front + (num_stars_front*3)
+star_kleurtjes_front_end= star_positions_front + (num_stars_front*5)-2
+
+num_stars_back			= 14
+star_kleurtjes_back_end	= star_positions_front + (num_stars_front*5) + (num_stars_back*5)-2
+star_positions_back		= zero_page_store + 2 + (num_stars_front*5)
+
+num_stars_mid 			= 14		
+star_positions_mid		= zero_page_store + 2 + (num_stars_front*5) + (num_stars_back*5)
+
+
 DUMMY_BYTE				= $00
 		
 ;;; -----------------------------------------------------------------------------
@@ -57,29 +67,22 @@ copy_char
 		dex
 		bne copy_char
 
-
 		lda #white
 		jsr fill_color_ram
-
 
 		ldx #0
 print		
 		lda msg_signature,x
 		beq print_done
 		sta screen_ram+(11*40)+10,x
+		sta screen_ram+(12*40)+10,x
+		sta screen_ram+(13*40)+10,x
+		sta screen_ram+(14*40)+10,x
+		sta screen_ram+(15*40)+10,x
+		sta screen_ram+(16*40)+10,x
 		inx
 		jmp print
 print_done
-
-await_fire_btn		
-        lda #16                 ; fire button pressed?
-        bit joystick_1
-        bne await_fire_btn
-		jsr $e544				; clear screen
-
-		lda #light_blue
-		jsr fill_color_ram
-		
 		
 ;;; -----------------------------------------------------------------------------
 ;;; prepare our zero page data store including the starfield data
@@ -91,6 +94,73 @@ fill_star_data
         sta zero_page_store,x
         dex
         bne fill_star_data
+
+;;; -----------------------------------------------------------------------------
+;;; initialize star field colours by screen row
+;;; -----------------------------------------------------------------------------
+
+		lda #white				; default star colour
+		jsr fill_color_ram
+
+
+first_color =  grey
+second_color = dark_grey
+
+		lda #first_color
+
+colorize_rows		
+		ldx #num_stars_front-1
+		
+colorize_screen_row		
+		ldy #40					; screen width in columns
+colorize_char
+color_ram_row_ptr_adr
+		sta (star_kleurtjes_front_end),y
+
+		dey
+		bne colorize_char
+		dec color_ram_row_ptr_adr+1	; modify hardcoded screen ram ptr
+		dec color_ram_row_ptr_adr+1	; modify hardcoded screen ram ptr
+		dex
+		bne colorize_screen_row
+
+		
+;; 		cmp #second_color		; repeat the code above for the next color?
+;; 		beq done_coloring
+;; 		lda #second_color
+;; 		ldx #<star_kleurtjes_back_end
+;; 		ldy #>star_kleurtjes_back_end
+;; 		stx color_ram_row_ptr_adr+1
+;; 		dec color_ram_row_ptr_adr+2
+;; 		jmp colorize_rows
+;; done_coloring
+		
+
+		ldx #num_stars_back-1
+		
+		lda #dark_grey
+colorize_screen_row2
+		ldy #40				; screen width in columns
+colorize_char2
+color_ram_row_ptr_adr2
+		sta (star_kleurtjes_back_end),y
+
+		dey
+		bne colorize_char2
+		dec color_ram_row_ptr_adr2+1	; modify hardcoded screen ram ptr
+		dec color_ram_row_ptr_adr2+1	; modify hardcoded screen ram ptr
+		dex
+		bne colorize_screen_row2
+
+		
+
+		
+await_fire_btn		
+        lda #16                 ; fire button pressed?
+        bit joystick_1
+        bne await_fire_btn
+
+		;; jsr $e544				; clear screen
 
 ;;; -----------------------------------------------------------------------------
 ;;; init sprites
@@ -178,7 +248,6 @@ int_handler
 
 		
         dec spr0_x				; update enemy position
-        dec spr0_x
         dec spr0_x
         dec spr0_x
         
@@ -313,7 +382,7 @@ star_cols 				= star_row_adrs_end +2
 char_star_moving_row	= char_mem + (char_star*8) + 4
 		
 		
-		lda char_star_moving_row; left-shift the line in char_star_1 that has the star
+		lda char_star_moving_row; left-shift the row in the char tile containing the star
 		clc
 
 rol_i	.var num_rols			; rotate the star a given number of ROLs
@@ -332,7 +401,7 @@ move_chars
 		rol						; rotate again to get carry into LSB
 		sta char_star_moving_row		
         
-        ldx #(num_stars)-1
+        ldx #num_stars-1
 
         ldy #star_row_adrs_end	; self-modifying code: reset hardcoded pointers to end of table
         sty screen_ptr_adr_1+1           
@@ -367,11 +436,9 @@ scroll_stars_done
 
 .endm
 
-star_positions_back_GL = zero_page_store + 2 + (num_stars_white*3)
-
-		#SCROLL_STARS star_positions_white, char_star_1, 2
-		#SCROLL_STARS star_positions_back_GL, char_star_back, 1
-
+		#SCROLL_STARS star_positions_front, char_star_front, 1
+		#SCROLL_STARS star_positions_back, char_star_back, 2
+		#SCROLL_STARS star_positions_mid, char_star_mid, 4
 		
 int_handler_wrapup      
         asl $d019               ; ACK interrupt (to re-enable it)       
@@ -387,14 +454,15 @@ int_handler_wrapup
 ;;; subroutine to set the screen color to the value of A
 ;;; -----------------------------------------------------------------------------
 
-		ldx #0
 fill_color_ram
+		ldx #0
+fill_color_ram_next_pos
 		sta color_ram,x
 		sta color_ram+$100,x
         sta color_ram+$200,x
         sta color_ram+$300,x	; this goes beyond color ram, but hey...
         dex
-        bne fill_color_ram
+        bne fill_color_ram_next_pos
 		rts
 
 		
@@ -470,18 +538,19 @@ bullet_data
 
 
 char_empty 	= " "
-char_star_1	= 64 				; screen code
-star_1_line = char_mem + (char_star_1*8) + 4
+char_star_front	= 64 				; screen code
 char_star_back = 65				; screen code
+char_star_mid = 66				; screen code
 
+		
 charset	
 		.include "font-8x8.lff.asm"		; the regular character font
 		
-		.byte %00000000 		; tile: a one-pixel star (char_star_1)
+		.byte %00000000 		; tile: a one-pixel star (char_star_front)
 		.byte %00000000
 		.byte %00000000
 		.byte %00000000
-		.byte %00000001
+		.byte %00000001			; <-- this row is shifted
 		.byte %00000000
 		.byte %00000000
 		.byte %00000000
@@ -490,7 +559,16 @@ charset
 		.byte %00000000
 		.byte %00000000
 		.byte %00000000
-		.byte %00000001
+		.byte %00000001			; <-- this row is shifted
+		.byte %00000000
+		.byte %00000000
+		.byte %00000000
+
+		.byte %00000000 		; tile: a one-pixel row star (char_star_mid)
+		.byte %00000000
+		.byte %00000000
+		.byte %00000000
+		.byte %00000001			; <-- this row is shifted
 		.byte %00000000
 		.byte %00000000
 		.byte %00000000
@@ -506,69 +584,23 @@ msg_signature
 zero_page_data_src
 		.byte $19, $79			; dummy, variable store
 		
-star_row_adrs_white_src
-		.word $798
-		.word $5e0
-		.word $540
-		.word $5e0
-		.word $680
-		.word $720
-		.word $720
-		.word $6f8
-		.word $608
-		.word $5b8
-		.word $608
-		.word $658
-		.word $4c8
-		.word $4f0
+star_row_adrs_front_src
 		
-star_cols_white_src
-		.byte 4
-		.byte 5
-		.byte 23
-		.byte 8
-		.byte 11
-		.byte 7
-		.byte 13
-		.byte 8
-		.byte 3
-		.byte 25
-		.byte 10
-		.byte 18
-		.byte 16
-		.byte 20		
+;;; starfield layer 0
+		.word $5b8,	$608,	$4f0,	$658,	$4a0,	$478,	$658,	$680,	$608,	$608,	$658,	$4a0,	$478,	$5b8
+		.byte 3,	27,	12,	31,	3,	23,	26,	4,	2,	15,	19,	6,	13,	24
+		.word $d9b8,	$da08,	$d8f0,	$da58,	$d8a0,	$d878,	$da58,	$da80,	$da08,	$da08,	$da58,	$d8a0,	$d878,	$d9b8
 
-star_row_adrs_back_src
-		.word $7c0
-		.word $630
-		.word $568
-		.word $5e0
-		.word $658
-		.word $748
-		.word $748
-		.word $720
-		.word $6a8
-		.word $5b8
-		.word $608
-		.word $658
-		.word $4c8
-		.word $4f0
+;;; starfield layer 1
+		.word $6a8,	$400,	$518,	$748,	$608,	$400,	$478,	$5b8,	$518,	$630,	$518,	$630,	$798,	$4f0
+		.byte 36,	10,	0,	3,	35,	10,	17,	35,	37,	16,	19,	9,	5,	37
+		.word $daa8,	$d800,	$d918,	$db48,	$da08,	$d800,	$d878,	$d9b8,	$d918,	$da30,	$d918,	$da30,	$db98,	$d8f0
+
+;;; starfield layer 2
+		.word $798,	$540,	$680,	$720,	$6a8,	$4a0,	$4f0,	$720,	$658,	$6d0,	$5e0,	$568,	$720,	$540
+		.byte 16,	17,	14,	37,	38,	7,	38,	12,	6,	35,	31,	0,	5,	32
+		.word $db98,	$d940,	$da80,	$db20,	$daa8,	$d8a0,	$d8f0,	$db20,	$da58,	$dad0,	$d9e0,	$d968,	$db20,	$d940
 		
-star_cols_back_src
-		.byte 4
-		.byte 5
-		.byte 23
-		.byte 8
-		.byte 11
-		.byte 7
-		.byte 13
-		.byte 8
-		.byte 3
-		.byte 25
-		.byte 10
-		.byte 18
-		.byte 16
-		.byte 20		
 		
 zero_page_data_src_end
 

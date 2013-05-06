@@ -1,19 +1,34 @@
 object Gen {
+
+  val rnd = util.Random
   
-  def genStars() {
-    val rnd = util.Random
-	val numStars = 13
-    print("\t\t.word ")
-    for (i <- 0 to numStars) { 
+  case class XY(screenRowAdr: String, column: Int, colorRamRowAdr: String)
+
+  def genStarLayers() {
+	println(
+	  ";;; starfield layer 0\n" +
+	  genStarLayer() + "\n" +
+	  ";;; starfield layer 1\n" +
+	  genStarLayer() + "\n"
+	  // ";;; starfield layer 2\n" +
+	  // genStarLayer()
+	)
+  }
+
+  def genStarLayer() = {
+	val numStars = 13 // TODO 13?
+
+    val stars = for (i <- 0 to numStars) yield { 
       val row = (rnd.nextFloat * 24).toInt
-      val rowAdr = Integer.toHexString(0x400 + row*40)
-      print("$" + rowAdr)
+      val screenRamRowAdr = Integer.toHexString(0x0400 + row*40)
+      val colorRamRowAdr = Integer.toHexString(0xd800 + row*40)
+      val column = (rnd.nextFloat * 39).toInt
+      XY(screenRamRowAdr, column, colorRamRowAdr)
     }
-	print("\n")
-    for (i <- 0 to numStars) { 
-      val col = (rnd.nextFloat * 39).toInt
-      println("\t\t.byte " + col)
-    }
+
+	stars.map(_.screenRowAdr)  .mkString("\t\t.word $", ",\t$", "\n") +
+	stars.map(_.column)        .mkString("\t\t.byte ", ",\t", "\n") +
+	stars.map(_.colorRamRowAdr).mkString("\t\t.word $", ",\t$", "\n")
   }
 }
 
