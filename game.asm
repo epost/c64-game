@@ -7,6 +7,7 @@
 		
 zero_page_store			= $04
 zero_page_temp_var		= zero_page_store
+
 num_stars_front			= 14
 star_positions_front	= zero_page_store +2
 star_row_adrs_front_end	= star_positions_front + (num_stars_front*2) -2
@@ -15,12 +16,11 @@ star_kleurtjes_front	= star_cols_front + (num_stars_front*3)
 star_kleurtjes_front_end= star_positions_front + (num_stars_front*5)-2
 
 num_stars_back			= 14
-star_kleurtjes_back_end	= star_positions_front + (num_stars_front*5) + (num_stars_back*5)-2
 star_positions_back		= zero_page_store + 2 + (num_stars_front*5)
+star_kleurtjes_back_end	= star_positions_front + (num_stars_front*5) + (num_stars_back*5)-2
 
 num_stars_mid 			= 14		
 star_positions_mid		= zero_page_store + 2 + (num_stars_front*5) + (num_stars_back*5)
-
 
 DUMMY_BYTE				= $00
 		
@@ -74,12 +74,8 @@ copy_char
 print		
 		lda msg_signature,x
 		beq print_done
-		sta screen_ram+(11*40)+10,x
+		;; sta screen_ram+(11*40)+10,x
 		sta screen_ram+(12*40)+10,x
-		sta screen_ram+(13*40)+10,x
-		sta screen_ram+(14*40)+10,x
-		sta screen_ram+(15*40)+10,x
-		sta screen_ram+(16*40)+10,x
 		inx
 		jmp print
 print_done
@@ -99,68 +95,62 @@ fill_star_data
 ;;; initialize star field colours by screen row
 ;;; -----------------------------------------------------------------------------
 
-		lda #white				; default star colour
+first_color = white
+second_color = grey
+third_color = dark_grey
+		
+		lda #first_color		; this is the default star colour
 		jsr fill_color_ram
 
-
-first_color =  grey
-second_color = dark_grey
-
-		lda #first_color
-
+		lda #second_color		; first pass through the loop
 colorize_rows		
 		ldx #num_stars_front-1
-		
 colorize_screen_row		
-		ldy #40					; screen width in columns
+		ldy #40-1				; screen width in columns
 colorize_char
 color_ram_row_ptr_adr
 		sta (star_kleurtjes_front_end),y
-
 		dey
-		bne colorize_char
+		bpl colorize_char
 		dec color_ram_row_ptr_adr+1	; modify hardcoded screen ram ptr
 		dec color_ram_row_ptr_adr+1	; modify hardcoded screen ram ptr
 		dex
 		bne colorize_screen_row
 
 		
-;; 		cmp #second_color		; repeat the code above for the next color?
+;; cmp #third_color		; repeat the code above for the next color?
+;; ;; tax
+;; ;; cpx #third_color		; repeat the code above for the next color?
+
 ;; 		beq done_coloring
-;; 		lda #second_color
+
+;; 		lda #third_color
 ;; 		ldx #<star_kleurtjes_back_end
 ;; 		ldy #>star_kleurtjes_back_end
 ;; 		stx color_ram_row_ptr_adr+1
-;; 		dec color_ram_row_ptr_adr+2
-;; 		jmp colorize_rows
+;; 		sty color_ram_row_ptr_adr+2
+;; 		ldx #num_stars_back-1
+;; loep jmp loep
+;; 		jmp colorize_screen_row
 ;; done_coloring
 		
 
 		ldx #num_stars_back-1
 		
-		lda #dark_grey
+		lda #third_color
 colorize_screen_row2
-		ldy #40				; screen width in columns
+		ldy #40							; screen width in columns
 colorize_char2
 color_ram_row_ptr_adr2
 		sta (star_kleurtjes_back_end),y
 
 		dey
-		bne colorize_char2
+		bpl colorize_char2
 		dec color_ram_row_ptr_adr2+1	; modify hardcoded screen ram ptr
 		dec color_ram_row_ptr_adr2+1	; modify hardcoded screen ram ptr
 		dex
 		bne colorize_screen_row2
 
-		
-
-		
-await_fire_btn		
-        lda #16                 ; fire button pressed?
-        bit joystick_1
-        bne await_fire_btn
-
-		;; jsr $e544				; clear screen
 
 ;;; -----------------------------------------------------------------------------
 ;;; init sprites
@@ -168,43 +158,61 @@ await_fire_btn
 
         lda #13                 ; sprite 0 starts at 13 * 64
         sta spr0_ptr
-        lda #14                 ; sprite 1
+        lda #14
         sta spr1_ptr
-        lda #15                 ; sprite 2
+        lda #15
         sta spr2_ptr
 		
-        ldx #spr_size_bytes
-fill_spr0
-        lda enemy_data,x
-        sta 13*64,x
+        ldx #spr_size_bytes		; TODO can't we let the assembler do this for us?
+copy_sprites
         lda ship_data,x
-        sta 14*64,x
+        sta 13*64,x
         lda bullet_data,x
+        sta 14*64,x
+        lda enemy_data,x
         sta 15*64,x
         dex
-        bne fill_spr0
+        bne copy_sprites
         
-        lda #$70                ; set x and y for sprite 0 (enemy)
-        sta spr0_x  
-        lda #100            
+        lda #30                 ; set x and y for sprite 0 (player)
+        sta spr0_x              
+        lda #$a0
         sta spr0_y
-        lda #magenta
+        lda #grey
         sta spr0_col            
 
-        lda #30                 ; set x and y for sprite 1 (player)
-        sta spr1_x              
-        lda #$e0                
-        sta spr1_y
-        lda #grey
-        sta spr1_col            
+        lda #light_green		; bullets (cyan, light_blue, light_green)
+        sta spr1_col
 
-        lda #cyan               ; bullets
+        lda #$70                ; set x and y for sprite 2 (enemy)
+        sta spr2_x  
+        lda #100            
+        sta spr2_y
+        lda #red
         sta spr2_col            
+
+
+await_fire_btn
+        lda #16                 ; fire button pressed?
+        bit joystick_1
+        bne await_fire_btn
+
+		;; jsr $e544				; clear screen
         
-        lda #%00000011          ; enable sprites 0 and 1 (enemy, player)
+        lda #%00000101          ; enable sprites 0 and 2 (player, enemy)
         sta spr_enable
 
 		
+		ldx #0
+print_score
+		lda msg_score,x
+		beq print_score_done
+		sta screen_ram + (23*40),x
+		inx
+		jmp print_score
+print_score_done
+
+
 ;;; -----------------------------------------------------------------------------
 ;;; install raster interrupt handler
 ;;; -----------------------------------------------------------------------------
@@ -242,46 +250,21 @@ loop_pro_semper
 ;;; -----------------------------------------------------------------------------
 
 int_handler
-
-		;; lda #yellow
-		;; sta $d020
-
+        dec spr2_x				; update enemy position
+        dec spr2_x
+        dec spr2_x
 		
-        dec spr0_x				; update enemy position
-        dec spr0_x
-        dec spr0_x
-        
-        lda %00000100           ; are there bullets onscreen?
+        lda %00000010           ; are there bullets onscreen?
         bit spr_enable          
         beq respawn_bullets_maybe
 move_bullet
-        inc spr2_x
-        beq stop_bullets
-        inc spr2_x
-        beq stop_bullets
-        inc spr2_x
-        beq stop_bullets
-        inc spr2_x
-        beq stop_bullets
-        inc spr2_x
-        beq stop_bullets
-        inc spr2_x
-        beq stop_bullets
-        inc spr2_x
-        beq stop_bullets
-        inc spr2_x
-        beq stop_bullets
-        inc spr2_x
-        beq stop_bullets
-        inc spr2_x
-        beq stop_bullets
-        inc spr2_x
-        beq stop_bullets
-        inc spr2_x
-        beq stop_bullets
-        jmp skip_stop_bullets
+		lda spr1_x
+		clc
+		adc #12					; bullet speed
+		sta spr1_x
+        bcc skip_stop_bullets
 stop_bullets
-        lda #%11111011          ; disable bullet sprite
+        lda #%11111101          ; disable bullet sprite
         and spr_enable
         sta spr_enable
 skip_stop_bullets
@@ -291,41 +274,41 @@ respawn_bullets_maybe
         bit joystick_1
         bne skip_respawn_bullets
 
-        lda #$04
-        sta $d021
+        ;; lda #$04
+        ;; sta $d021
         
-        ldx spr1_x              ; bullet x = player x
-        ldy spr1_y              ; bullet y = player y
-        stx spr2_x
-        sty spr2_y
-        lda #%00000100          ; enable bullet sprite
+        ldx spr0_x              ; bullet x = player x
+        ldy spr0_y              ; bullet y = player y
+        stx spr1_x
+        sty spr1_y
+        lda #%00000010          ; enable bullet sprite
         ora spr_enable
         sta spr_enable
 
-        lda #$00
-        sta $d021
+        ;; lda #$00
+        ;; sta $d021
 
 skip_respawn_bullets        
         
         lda #2                  ; read joystick and update player position
         bit joystick_1
         bne skip_move_player_down
-        inc spr1_y
-        inc spr1_y
+        inc spr0_y
+        inc spr0_y
 skip_move_player_down
         lda #1
         bit joystick_1
         bne skip_move_player_up
-        dec spr1_y
-        dec spr1_y
+        dec spr0_y
+        dec spr0_y
 skip_move_player_up
 
-        lda #%00000101
+        lda #%00000110
         cmp spr_spr_collision
         bne skip_enemy_hit
-        inc spr0_col
+        inc spr2_col
 		lda #$ff
-		sta spr0_x
+		sta spr2_x
         lda #%11111011          ; disable bullet sprite
         and spr_enable
         sta spr_enable
@@ -456,6 +439,7 @@ int_handler_wrapup
 
 fill_color_ram
 		ldx #0
+		lda #green
 fill_color_ram_next_pos
 		sta color_ram,x
 		sta color_ram+$100,x
@@ -466,30 +450,7 @@ fill_color_ram_next_pos
 		rts
 
 		
-sprite_data        
-enemy_data
-        .byte %00000000,%00000000,%00000000
-        .byte %00000000,%00111100,%00000000
-        .byte %00000000,%11000111,%00000000
-        .byte %00000001,%10011111,%10000000
-        .byte %00000010,%01000111,%11000000
-        .byte %11111111,%11111111,%11111111
-        .byte %00110100,%11001100,%11011100
-        .byte %00000111,%11111111,%11100000
-        .byte %00000011,%11111111,%11000000
-        .byte %00000000,%11111111,%00000000
-        .byte %00000000,%00000000,%00000000
-        .byte %00000000,%00000000,%00000000
-        .byte %00000000,%00000000,%00000000
-        .byte %00000000,%00000000,%00000000
-        .byte %00000000,%00000000,%00000000
-        .byte %00000000,%00000000,%00000000
-        .byte %00000000,%00000000,%00000000
-        .byte %00000000,%00000000,%00000000
-        .byte %00000000,%00000000,%00000000
-        .byte %00000000,%00000000,%00000000
-        .byte %00000000,%00000000,%00000000
-        
+sprite_data                
 ship_data
         .byte %00000000,%00000000,%00000000
         .byte %00000000,%00000000,%00000000
@@ -525,10 +486,10 @@ bullet_data
         .byte %00000000,%00000000,%00000000
         .byte %00000000,%00000000,%00000000
         .byte %00000000,%00000000,%00000000
-        .byte %00000000,%00000000,%00000000
-        .byte %00000000,%00000000,%00000000
-        .byte %00000000,%00000000,%00000000
-        .byte %00000000,%00000000,%00000000
+        .byte %00000110,%00000000,%00000000
+        .byte %00000000,%00011100,%00000000
+        .byte %00101100,%11111111,%00000000
+        .byte %00000000,%00000100,%00000000
         .byte %00000000,%10000000,%00000000
         .byte %00000000,%00000011,%10000000
         .byte %10101100,%01111111,%11100000
@@ -536,12 +497,33 @@ bullet_data
 		.byte %00000011,%00000000,%00000000
 		.byte %00000000,%00000000,%00000000
 
+enemy_data
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00000000,%00000000,%00000000
+        .byte %00011100,%00111100,%00111000
+        .byte %01100010,%11000111,%01000110
+        .byte %01100001,%10011111,%10000100
+        .byte %00000010,%01000111,%11000000
+        .byte %11111111,%11111111,%11111111
+        .byte %00110100,%11001100,%11011100
+        .byte %00000111,%11111111,%11100000
+        .byte %00000011,%11111111,%11000000
+        .byte %00000000,%11111111,%00000000
+        .byte %00000000,%00000000,%00000000
 
-char_empty 	= " "
-char_star_front	= 64 				; screen code
+char_empty = " "
+char_star_front	= 64 			; screen code
 char_star_back = 65				; screen code
 char_star_mid = 66				; screen code
-
 		
 charset	
 		.include "font-8x8.lff.asm"		; the regular character font
@@ -577,8 +559,12 @@ msg_signature
 .screen "(c) 2013 lemon/r&r"
 .byte 0
 
+msg_score
+.screen "score 1979"
+.byte 0
+
 ;;; -----------------------------------------------------------------------------
-;;; data store to be copied to zero page
+;;; data store to be copied to zero page -- TODO use '.offs' or something?
 ;;; -----------------------------------------------------------------------------
 		
 zero_page_data_src
@@ -592,16 +578,15 @@ star_row_adrs_front_src
 		.word $d9b8,	$da08,	$d8f0,	$da58,	$d8a0,	$d878,	$da58,	$da80,	$da08,	$da08,	$da58,	$d8a0,	$d878,	$d9b8
 
 ;;; starfield layer 1
-		.word $6a8,	$400,	$518,	$748,	$608,	$400,	$478,	$5b8,	$518,	$630,	$518,	$630,	$798,	$4f0
+		.word $6a8,	$400,	$518,	$748,	$608,	$400,	$478,	$5b8,	$518,	$630,	$518,	$630,	$400,	$4f0
 		.byte 36,	10,	0,	3,	35,	10,	17,	35,	37,	16,	19,	9,	5,	37
 		.word $daa8,	$d800,	$d918,	$db48,	$da08,	$d800,	$d878,	$d9b8,	$d918,	$da30,	$d918,	$da30,	$db98,	$d8f0
 
 ;;; starfield layer 2
-		.word $798,	$540,	$680,	$720,	$6a8,	$4a0,	$4f0,	$720,	$658,	$6d0,	$5e0,	$568,	$720,	$540
+		.word $400,	$540,	$680,	$720,	$6a8,	$4a0,	$4f0,	$720,	$658,	$6d0,	$5e0,	$568,	$720,	$540
 		.byte 16,	17,	14,	37,	38,	7,	38,	12,	6,	35,	31,	0,	5,	32
 		.word $db98,	$d940,	$da80,	$db20,	$daa8,	$d8a0,	$d8f0,	$db20,	$da58,	$dad0,	$d9e0,	$d968,	$db20,	$d940
-		
-		
+
 zero_page_data_src_end
 
 spr0_ptr = $07f8
