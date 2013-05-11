@@ -4,6 +4,10 @@
 ;;;
 ;;; (c) 2013 Erik / SHINSETSU
 ;;; -----------------------------------------------------------------------------
+
+
+USE_FFFE_NOT_0314 = 1			; undefine to use 0314 instead of fffe
+SUPPRESS_COLOR_INIT = 1
 		
 zero_page_store			= $04
 zero_page_temp_var		= zero_page_store
@@ -133,8 +137,8 @@ color_ram_row_ptr_adr
 ;; loep jmp loep
 ;; 		jmp colorize_screen_row
 ;; done_coloring
-		
 
+.ifndef SUPPRESS_COLOR_INIT
 		ldx #num_stars_back-1
 		
 		lda #third_color
@@ -150,18 +154,23 @@ color_ram_row_ptr_adr2
 		dec color_ram_row_ptr_adr2+1	; modify hardcoded screen ram ptr
 		dex
 		bne colorize_screen_row2
-
+.endif
 
 ;;; -----------------------------------------------------------------------------
 ;;; init sprites
 ;;; -----------------------------------------------------------------------------
 
-        lda #13                 ; sprite 0 starts at 13 * 64
+        lda #13                 ; player sprite 0 starts at 13 * 64
         sta spr0_ptr
-        lda #14
+        lda #14					; bulletSCROLL_s
         sta spr1_ptr
-        lda #15
+        lda #15					; enemies are sprites 2 - 7
         sta spr2_ptr
+        sta spr3_ptr
+        sta spr4_ptr
+        sta spr5_ptr
+        sta spr6_ptr
+        sta spr7_ptr
 		
         ldx #spr_size_bytes		; TODO can't we let the assembler do this for us?
 copy_sprites
@@ -184,22 +193,51 @@ copy_sprites
         lda #light_green		; bullets (cyan, light_blue, light_green)
         sta spr1_col
 
-        lda #$70                ; set x and y for sprite 2 (enemy)
-        sta spr2_x  
-        lda #100            
-        sta spr2_y
-        lda #red
-        sta spr2_col            
+		lda #40					; set x and y for sprites 2 - 7 (enemies)
+		clc
+		sta spr2_x	
+		adc #20
+		sta spr3_x
+		adc #20
+		sta spr4_x
+		adc #20
+		sta spr5_x
+		adc #20
+		sta spr6_x
+		adc #20
+		sta spr7_x
 
+		lda #50
+		sta spr2_y
+		adc #20
+		sta spr3_y
+		adc #20
+		sta spr4_y
+		adc #20
+		sta spr5_y
+		adc #20
+		sta spr6_y
+		adc #20
+		sta spr7_y
+
+		lda #red
+		sta spr2_col			
+		lda #grey
+		sta spr3_col
+
+
+;;; -----------------------------------------------------------------------------
+;;; start game
+;;; -----------------------------------------------------------------------------
 
 await_fire_btn
         lda #16                 ; fire button pressed?
         bit joystick_1
         bne await_fire_btn
 
-		;; jsr $e544				; clear screen
+		jsr $e544				; clear screen
         
-        lda #%00000101          ; enable sprites 0 and 2 (player, enemy)
+        lda #%11111101          ; enable sprites 0 and 2 (player, enemy)
         sta spr_enable
 
 		
@@ -223,38 +261,81 @@ print_score_done
         sta $dc0d               ; Turn off CIA 1 interrupts
         sta $dd0d               ; Turn off CIA 2 interrupts
         stx $d01a               ; Turn on raster interrupts
+        lda $dc0d               ; ACK CIA 1 interrupts
+        lda $dd0d               ; ACK CIA 2 interrupts
 
         lda #<int_handler       ; set raster interrupt vector
-        ldx #>int_handler       
+        ldx #>int_handler
+
+.ifdef USE_FFFE_NOT_0314
+        sta $fffe
+        stx $ffff
+.endif
+.ifndef USE_FFFE_NOT_0314
         sta $0314               
         stx $0315
-
-        ldy #$0                 ; set scanline on which to trigger interrupt
+.endif
+        ldy #$f0                ; set scanline on which to trigger interrupt
         sty $d012
 		lda $d011				; scanline hi bit
 		and #%01111111
 		sta $d011
 
-        lda $dc0d               ; ACK CIA 1 interrupts
-        lda $dd0d               ; ACK CIA 2 interrupts
+.ifdef USE_FFFE_NOT_0314
+		lda #$35				; disable kernal and BASIC memory ($e000 - $ffff)
+		sta $01
+.endif
+
         asl $d019               ; ACK VIC interrupts
         cli
 
-		
 loop_pro_semper
 		jmp loop_pro_semper
-
 
 ;;; -----------------------------------------------------------------------------
 ;;; main loop, implemented as a raster interrupt handler
 ;;; -----------------------------------------------------------------------------
 
 int_handler
-        dec spr2_x				; update enemy position
+
+.ifdef USE_FFFE_NOT_0314
+		pha						; needed if our raster int handler is set in fffe instead of 0314
+		txa
+		pha
+		tya
+		pha
+.endif
+
+        dec spr2_x				; update enemy positions
         dec spr2_x
         dec spr2_x
-		
-        lda %00000010           ; are there bullets onscreen?
+
+        dec spr3_x
+        dec spr3_x
+        dec spr3_x
+        dec spr3_x
+        dec spr3_x
+
+        dec spr4_x
+        dec spr4_x
+
+        dec spr5_x
+        dec spr5_x
+        dec spr5_x
+
+        dec spr6_x
+        dec spr6_x
+        dec spr6_x
+        dec spr6_x
+        dec spr6_x
+
+        dec spr7_x
+        dec spr7_x
+        dec spr7_x
+        dec spr7_x
+        dec spr7_x
+
+        lda #%00000010           ; update bullets - are there bullets onscreen?
         bit spr_enable          
         beq respawn_bullets_maybe
 move_bullet
@@ -274,9 +355,6 @@ respawn_bullets_maybe
         bit joystick_1
         bne skip_respawn_bullets
 
-        ;; lda #$04
-        ;; sta $d021
-        
         ldx spr0_x              ; bullet x = player x
         ldy spr0_y              ; bullet y = player y
         stx spr1_x
@@ -285,33 +363,69 @@ respawn_bullets_maybe
         ora spr_enable
         sta spr_enable
 
-        ;; lda #$00
-        ;; sta $d021
-
 skip_respawn_bullets        
         
         lda #2                  ; read joystick and update player position
         bit joystick_1
         bne skip_move_player_down
-        inc spr0_y
-        inc spr0_y
+		inc spr0_y
+		inc spr0_y
 skip_move_player_down
-        lda #1
-        bit joystick_1
-        bne skip_move_player_up
-        dec spr0_y
-        dec spr0_y
+		lda #1
+		bit joystick_1
+		bne skip_move_player_up
+		dec spr0_y
+		dec spr0_y
 skip_move_player_up
 
-        lda #%00000110
-        cmp spr_spr_collision
-        bne skip_enemy_hit
-        inc spr2_col
-		lda #$ff
-		sta spr2_x
-        lda #%11111011          ; disable bullet sprite
-        and spr_enable
-        sta spr_enable
+		lda spr_spr_collision	; any enemies being hit by bullets?
+		ldx #$ff				; if so, reset to rightmost x-position
+enemy_2_hit
+		cmp #%00000110
+		bne enemy_3_hit
+		inc spr2_col
+		stx spr2_x
+		jmp disable_bullets
+
+enemy_3_hit
+		cmp #%00001010
+		bne enemy_4_hit
+		inc spr3_col
+		stx spr3_x
+		jmp disable_bullets
+
+enemy_4_hit
+		cmp #%00010010
+		bne enemy_5_hit
+		inc spr4_col
+		stx spr4_x
+		jmp disable_bullets
+
+enemy_5_hit
+		cmp #%00100010
+		bne enemy_6_hit
+		inc spr5_col
+		stx spr5_x
+		jmp disable_bullets
+
+enemy_6_hit
+		cmp #%01000010
+		bne enemy_7_hit
+		inc spr6_col
+		stx spr6_x
+		jmp disable_bullets
+
+enemy_7_hit
+		cmp #%10000010
+		bne skip_enemy_hit
+		inc spr7_col
+		stx spr7_x
+		jmp disable_bullets
+
+disable_bullets
+		lda #%11111101			; disable bullet sprite
+		and spr_enable
+		sta spr_enable
 
 skip_enemy_hit
 
@@ -358,7 +472,8 @@ SCROLL_STARS .macro
 star_positions 	= \1
 char_star 		= \2
 num_rols		= \3
-		
+SUPPRESS_STA	= \4
+
 num_stars				= 14
 star_row_adrs_end		= star_positions + (num_stars*2) -2
 star_cols 				= star_row_adrs_end +2
@@ -394,8 +509,15 @@ next_star
 		lda star_cols,x			; Y = star's screen column
         tay
         lda #char_empty			; clear star's old position with space char
+.ifne SUPPRESS_STA
+		sty zero_page_temp_var
+		ldy #0
+.endif
 screen_ptr_adr_1
 		sta (DUMMY_BYTE),y      ; hardcoded ptr into screen ram, will be modified
+.ifne SUPPRESS_STA
+		ldy zero_page_temp_var
+.endif
         dey                     ; update star's screen column
         tya
         bne skip_respawn_star
@@ -405,8 +527,15 @@ respawn_star
 skip_respawn_star       
         sta star_cols,x
         lda #char_star
+.ifne SUPPRESS_STA
+  sty zero_page_temp_var
+  ldy #0
+.endif
 screen_ptr_adr_2
 		sta (DUMMY_BYTE),y		; hardcoded ptr into screen ram, will be modified
+.ifne SUPPRESS_STA
+  ldy zero_page_temp_var
+.endif		
         dec screen_ptr_adr_1+1	; self-modifying code: point DUMMY_BYTE 
         dec screen_ptr_adr_1+1	; to next star's data 
         dec screen_ptr_adr_2+1           
@@ -419,9 +548,9 @@ scroll_stars_done
 
 .endm
 
-		#SCROLL_STARS star_positions_front, char_star_front, 1
-		#SCROLL_STARS star_positions_back, char_star_back, 2
-		#SCROLL_STARS star_positions_mid, char_star_mid, 4
+		#SCROLL_STARS star_positions_front, char_star_front, 1, 0
+		;; #SCROLL_STARS star_positions_back, char_star_back, 2, 1
+		#SCROLL_STARS star_positions_mid, char_star_mid, 2, 0
 		
 int_handler_wrapup      
         asl $d019               ; ACK interrupt (to re-enable it)       
@@ -603,6 +732,31 @@ spr2_ptr = $07fa
 spr2_x = $d004
 spr2_y = $d005
 spr2_col = $d029
+
+spr3_ptr = $07fb
+spr3_x = $d006
+spr3_y = $d007
+spr3_col = $d02a
+
+spr4_ptr = $07fc
+spr4_x = $d008
+spr4_y = $d009
+spr4_col = $d02b
+
+spr5_ptr = $07fd
+spr5_x = $d00a
+spr5_y = $d00b
+spr5_col = $d02c
+
+spr6_ptr = $07fe
+spr6_x = $d00c
+spr6_y = $d00d
+spr6_col = $d02d
+
+spr7_ptr = $07ff
+spr7_x = $d00e
+spr7_y = $d00f
+spr7_col = $d02e
 
 spr_enable = $d015
 spr_spr_collision = $d01e
