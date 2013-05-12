@@ -5,6 +5,7 @@
 ;;; (c) 2013 Erik / SHINSETSU
 ;;; -----------------------------------------------------------------------------
 
+.cpu 6502
 
 USE_FFFE_NOT_0314 = 1			; undefine to use 0314 instead of fffe
 SUPPRESS_COLOR_INIT = 1
@@ -41,6 +42,7 @@ DUMMY_BYTE				= $00
 		
 * = $0810 						; 2064 decimal
 
+		
 ;;; -----------------------------------------------------------------------------
 ;;; initialize the screen
 ;;; -----------------------------------------------------------------------------
@@ -108,7 +110,7 @@ third_color = dark_grey
 
 		lda #second_color		; first pass through the loop
 colorize_rows		
-		ldx #num_stars_front-1
+		ldx #num_stars_front -1
 colorize_screen_row		
 		ldy #40-1				; screen width in columns
 colorize_char
@@ -138,7 +140,7 @@ color_ram_row_ptr_adr
 ;; 		jmp colorize_screen_row
 ;; done_coloring
 
-.ifndef SUPPRESS_COLOR_INIT
+.ifne SUPPRESS_COLOR_INIT
 		ldx #num_stars_back-1
 		
 		lda #third_color
@@ -239,7 +241,6 @@ await_fire_btn
         
         lda #%11111101          ; enable sprites 0 and 2 (player, enemy)
         sta spr_enable
-
 		
 		ldx #0
 print_score
@@ -254,7 +255,7 @@ print_score_done
 ;;; -----------------------------------------------------------------------------
 ;;; install raster interrupt handler
 ;;; -----------------------------------------------------------------------------
-		
+
         sei                     ; turn off interrupts
         lda #$7f
         ldx #$01
@@ -267,11 +268,10 @@ print_score_done
         lda #<int_handler       ; set raster interrupt vector
         ldx #>int_handler
 
-.ifdef USE_FFFE_NOT_0314
+.if USE_FFFE_NOT_0314
         sta $fffe
         stx $ffff
-.endif
-.ifndef USE_FFFE_NOT_0314
+.else
         sta $0314               
         stx $0315
 .endif
@@ -281,7 +281,7 @@ print_score_done
 		and #%01111111
 		sta $d011
 
-.ifdef USE_FFFE_NOT_0314
+.if USE_FFFE_NOT_0314
 		lda #$35				; disable kernal and BASIC memory ($e000 - $ffff)
 		sta $01
 .endif
@@ -298,7 +298,7 @@ loop_pro_semper
 
 int_handler
 
-.ifdef USE_FFFE_NOT_0314
+.if USE_FFFE_NOT_0314
 		pha						; needed if our raster int handler is set in fffe instead of 0314
 		txa
 		pha
@@ -483,14 +483,9 @@ char_star_moving_row	= char_mem + (char_star*8) + 4
 		lda char_star_moving_row; left-shift the row in the char tile containing the star
 		clc
 
-rol_i	.var num_rols			; rotate the star a given number of ROLs
-do_rol	.lbl
+.rept num_rols					; rotate the star a given number of ROLs
 		rol						; works if number of ROLs is even
-rol_i	.var rol_i-1
-		.ifne rol_i
-		.goto do_rol
-		.endif
-
+.next
 		bcs move_chars
 		sta char_star_moving_row
 		jmp scroll_stars_done
@@ -684,13 +679,21 @@ charset
 		.byte %00000000
 		.byte %00000000
 
+;;; -----------------------------------------------------------------------------
+;;; strings encoded as screen codes
+;;; -----------------------------------------------------------------------------
+
+.enc screen
+
 msg_signature		
-.screen "(c) 2013 lemon/r&r"
+.text "(c) 2013 lemon/r&r"
 .byte 0
 
 msg_score
-.screen "score 1979"
+.text "score 1979"
 .byte 0
+
+.enc none
 
 ;;; -----------------------------------------------------------------------------
 ;;; data store to be copied to zero page -- TODO use '.offs' or something?
