@@ -8,7 +8,6 @@
 .cpu 6502
 
 USE_FFFE_NOT_0314 = 1			; undefine to use 0314 instead of fffe
-SUPPRESS_COLOR_INIT = 1
 		
 zero_page_store			= $04
 zero_page_temp_var		= zero_page_store
@@ -28,6 +27,7 @@ num_stars_mid 			= 14
 star_positions_mid		= zero_page_store + 2 + (num_stars_front*5) + (num_stars_back*5)
 
 DUMMY_BYTE				= $00
+
 		
 ;;; -----------------------------------------------------------------------------
 ;;; BASIC loader using SYS 2064
@@ -38,14 +38,13 @@ DUMMY_BYTE				= $00
 .byte $0c,$08,$d0,$07,$9e
 .text " 2064"
 .byte $00,$00,$00,$00
-
 		
-* = $0810 						; 2064 decimal
 
-		
 ;;; -----------------------------------------------------------------------------
 ;;; initialize the screen
 ;;; -----------------------------------------------------------------------------
+
+* = $0810 						; 2064 decimal
 
         lda #%00010000			; set text mode, 24 rows, no extended color mode
         sta $d011
@@ -59,8 +58,31 @@ DUMMY_BYTE				= $00
 		sta $d021
 		jsr $e544				; clear screen
 
+
+		ldx #0
+print
+		lda msg_signature,x
+		beq print_done
+		sta screen_ram+(12*40)+10,x
+		inx
+		jmp print
+print_done
+
+
+;;; -----------------------------------------------------------------------------
+;;; initialize a few memory blocks we'll need
+;;; -----------------------------------------------------------------------------
+
+		sei
+		lda #$7f				; disable kernal interrupts, making the zero page available
+		sta $dc0d				; disable CIA 1 interrupts
+		lda $dc0d				; get rid of any pending CIA 1 IRQ's
+		sta $dd0d				; disable CIA 2 interrupts
+		lda $dd0d				; get rid of any pending CIA 2 IRQ's
+		cli
+
 		
-		ldx #$ff
+		ldx #$ff				; copy our charset into character memory
 copy_char
 		lda charset,x
 		sta char_mem,x
@@ -76,26 +98,14 @@ copy_char
 		lda #white
 		jsr fill_color_ram
 
-		ldx #0
-print		
-		lda msg_signature,x
-		beq print_done
-		;; sta screen_ram+(11*40)+10,x
-		sta screen_ram+(12*40)+10,x
-		inx
-		jmp print
-print_done
-		
-;;; -----------------------------------------------------------------------------
-;;; prepare our zero page data store including the starfield data
-;;; -----------------------------------------------------------------------------
-        
-        ldx #(zero_page_data_src_end - zero_page_data_src)
-fill_star_data
+
+		ldx #size(zero_page_data_src) -1
+init_zp_data
         lda zero_page_data_src,x
         sta zero_page_store,x
         dex
-        bne fill_star_data
+        bne init_zp_data
+
 
 ;;; -----------------------------------------------------------------------------
 ;;; initialize star field colours by screen row
@@ -123,7 +133,7 @@ color_ram_row_ptr_adr
 		dex
 		bne colorize_screen_row
 
-		
+
 ;; cmp #third_color		; repeat the code above for the next color?
 ;; ;; tax
 ;; ;; cpx #third_color		; repeat the code above for the next color?
@@ -140,23 +150,19 @@ color_ram_row_ptr_adr
 ;; 		jmp colorize_screen_row
 ;; done_coloring
 
-.ifne SUPPRESS_COLOR_INIT
-		ldx #num_stars_back-1
-		
+		ldx #num_stars_back -1
 		lda #third_color
 colorize_screen_row2
 		ldy #40							; screen width in columns
 colorize_char2
 color_ram_row_ptr_adr2
 		sta (star_kleurtjes_back_end),y
-
 		dey
 		bpl colorize_char2
 		dec color_ram_row_ptr_adr2+1	; modify hardcoded screen ram ptr
 		dec color_ram_row_ptr_adr2+1	; modify hardcoded screen ram ptr
 		dex
 		bne colorize_screen_row2
-.endif
 
 ;;; -----------------------------------------------------------------------------
 ;;; init sprites
@@ -257,34 +263,23 @@ print_score_done
 ;;; -----------------------------------------------------------------------------
 
         sei                     ; turn off interrupts
-        lda #$7f
-        ldx #$01
-        sta $dc0d               ; Turn off CIA 1 interrupts
-        sta $dd0d               ; Turn off CIA 2 interrupts
-        stx $d01a               ; Turn on raster interrupts
-        lda $dc0d               ; ACK CIA 1 interrupts
-        lda $dd0d               ; ACK CIA 2 interrupts
 
-        lda #<int_handler       ; set raster interrupt vector
+		ldx #1					; enable raster interrupts
+		stx $d01a
+
+		lda #<int_handler       ; set raster interrupt vector
         ldx #>int_handler
-
-.if USE_FFFE_NOT_0314
         sta $fffe
         stx $ffff
-.else
-        sta $0314               
-        stx $0315
-.endif
-        ldy #$f0                ; set scanline on which to trigger interrupt
+
+		ldy #$f0                ; set scanline on which to trigger interrupt
         sty $d012
 		lda $d011				; scanline hi bit
 		and #%01111111
 		sta $d011
 
-.if USE_FFFE_NOT_0314
 		lda #$35				; disable kernal and BASIC memory ($e000 - $ffff)
 		sta $01
-.endif
 
         asl $d019               ; ACK VIC interrupts
         cli
@@ -292,19 +287,18 @@ print_score_done
 loop_pro_semper
 		jmp loop_pro_semper
 
+
 ;;; -----------------------------------------------------------------------------
 ;;; main loop, implemented as a raster interrupt handler
 ;;; -----------------------------------------------------------------------------
 
 int_handler
 
-.if USE_FFFE_NOT_0314
 		pha						; needed if our raster int handler is set in fffe instead of 0314
 		txa
 		pha
 		tya
 		pha
-.endif
 
         dec spr2_x				; update enemy positions
         dec spr2_x
@@ -472,7 +466,6 @@ SCROLL_STARS .macro
 star_positions 	= \1
 char_star 		= \2
 num_rols		= \3
-SUPPRESS_STA	= \4
 
 num_stars				= 14
 star_row_adrs_end		= star_positions + (num_stars*2) -2
@@ -504,15 +497,8 @@ next_star
 		lda star_cols,x			; Y = star's screen column
         tay
         lda #char_empty			; clear star's old position with space char
-.ifne SUPPRESS_STA
-		sty zero_page_temp_var
-		ldy #0
-.endif
 screen_ptr_adr_1
 		sta (DUMMY_BYTE),y      ; hardcoded ptr into screen ram, will be modified
-.ifne SUPPRESS_STA
-		ldy zero_page_temp_var
-.endif
         dey                     ; update star's screen column
         tya
         bne skip_respawn_star
@@ -522,15 +508,8 @@ respawn_star
 skip_respawn_star       
         sta star_cols,x
         lda #char_star
-.ifne SUPPRESS_STA
-  sty zero_page_temp_var
-  ldy #0
-.endif
 screen_ptr_adr_2
 		sta (DUMMY_BYTE),y		; hardcoded ptr into screen ram, will be modified
-.ifne SUPPRESS_STA
-  ldy zero_page_temp_var
-.endif		
         dec screen_ptr_adr_1+1	; self-modifying code: point DUMMY_BYTE 
         dec screen_ptr_adr_1+1	; to next star's data 
         dec screen_ptr_adr_2+1           
@@ -540,15 +519,14 @@ screen_ptr_adr_2
         bne next_star
 
 scroll_stars_done
-
 .endm
 
-		#SCROLL_STARS star_positions_front, char_star_front, 1, 0
-		;; #SCROLL_STARS star_positions_back, char_star_back, 2, 1
-		#SCROLL_STARS star_positions_mid, char_star_mid, 2, 0
+		#SCROLL_STARS star_positions_front, char_star_front, 1
+		#SCROLL_STARS star_positions_back, char_star_back, 2
+		#SCROLL_STARS star_positions_mid, char_star_mid, 4
 		
 int_handler_wrapup      
-        asl $d019               ; ACK interrupt (to re-enable it)       
+        asl $d019               ; ack the IRQ, marking it as 'handled', so it may occur again
         pla
         tay
         pla
@@ -698,17 +676,17 @@ msg_score
 ;;; -----------------------------------------------------------------------------
 ;;; data store to be copied to zero page -- TODO use '.offs' or something?
 ;;; -----------------------------------------------------------------------------
-		
-zero_page_data_src
+
+zero_page_data_src .block
 		.byte $19, $79			; dummy, variable store
-		
+
 star_row_adrs_front_src
-		
+star_layer_0 .block
 ;;; starfield layer 0
 		.word $5b8,	$608,	$4f0,	$658,	$4a0,	$478,	$658,	$680,	$608,	$608,	$658,	$4a0,	$478,	$5b8
 		.byte 3,	27,	12,	31,	3,	23,	26,	4,	2,	15,	19,	6,	13,	24
 		.word $d9b8,	$da08,	$d8f0,	$da58,	$d8a0,	$d878,	$da58,	$da80,	$da08,	$da08,	$da58,	$d8a0,	$d878,	$d9b8
-
+.bend
 ;;; starfield layer 1
 		.word $6a8,	$400,	$518,	$748,	$608,	$400,	$478,	$5b8,	$518,	$630,	$518,	$630,	$400,	$4f0
 		.byte 36,	10,	0,	3,	35,	10,	17,	35,	37,	16,	19,	9,	5,	37
@@ -719,6 +697,7 @@ star_row_adrs_front_src
 		.byte 16,	17,	14,	37,	38,	7,	38,	12,	6,	35,	31,	0,	5,	32
 		.word $db98,	$d940,	$da80,	$db20,	$daa8,	$d8a0,	$d8f0,	$db20,	$da58,	$dad0,	$d9e0,	$d968,	$db20,	$d940
 
+.bend
 zero_page_data_src_end
 
 spr0_ptr = $07f8
@@ -793,3 +772,4 @@ grey = 12
 light_green = 13
 light_blue = 14
 light_grey = 15
+

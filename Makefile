@@ -14,3 +14,6 @@ experiment:
 	${asm} ${experiment}.asm
 	${asm} -l ${experiment}-disassembled.asm ${experiment}.asm
 
+
+screen:
+	${asm} ${asmopts} -a -o screen.prg -l screen.labels -L screen.assembled.asm screen.asm
