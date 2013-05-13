@@ -110,7 +110,7 @@ init_zp_data
 ;;; -----------------------------------------------------------------------------
 ;;; initialize star field colours by screen row
 ;;; -----------------------------------------------------------------------------
-
+	
 first_color = white
 second_color = grey
 third_color = dark_grey
@@ -153,7 +153,7 @@ color_ram_row_ptr_adr
 		ldx #num_stars_back -1
 		lda #third_color
 colorize_screen_row2
-		ldy #40							; screen width in columns
+		ldy #40-1						; screen width in columns
 colorize_char2
 color_ram_row_ptr_adr2
 		sta (star_kleurtjes_back_end),y
@@ -243,7 +243,8 @@ await_fire_btn
         bit joystick_1
         bne await_fire_btn
 
-		jsr $e544				; clear screen
+		lda #" "
+		jsr fill_screen_ram
         
         lda #%11111101          ; enable sprites 0 and 2 (player, enemy)
         sta spr_enable
@@ -536,20 +537,36 @@ int_handler_wrapup
 
 
 ;;; -----------------------------------------------------------------------------
+;;; subroutine to set every character onscreen to the value of A
+;;; -----------------------------------------------------------------------------
+
+fill_screen_ram .proc
+		ldx #0
+fill_screen_ram_next_pos
+		sta screen_ram,x
+		sta screen_ram+$100,x
+		sta screen_ram+$200,x
+		sta screen_ram+$300-23,x
+		dex
+		bne fill_screen_ram_next_pos
+		rts
+.pend
+
+;;; -----------------------------------------------------------------------------
 ;;; subroutine to set the screen color to the value of A
 ;;; -----------------------------------------------------------------------------
 
-fill_color_ram
+fill_color_ram .proc
 		ldx #0
-		lda #green
 fill_color_ram_next_pos
 		sta color_ram,x
 		sta color_ram+$100,x
         sta color_ram+$200,x
-        sta color_ram+$300,x	; this goes beyond color ram, but hey...
+		sta color_ram+$300-23,x
         dex
         bne fill_color_ram_next_pos
 		rts
+.pend
 
 		
 sprite_data                
