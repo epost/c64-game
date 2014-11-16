@@ -1,0 +1,9 @@
+#+title: C64 Space Shooter
+
+[[./img/banner.png]]
+
+- Horizontally scrolling star field implemented as characters.
+- Player and enemy sprites.
+- Joystick control.
+- CMOS 6510 assembly intended for use with 64tass.
+- Hours of fun for the whole family.
