@@ -5,18 +5,18 @@ object Gen {
   case class XY(screenRowAdr: String, column: Int, colorRamRowAdr: String)
 
   def genStarLayers() {
-	println(
-	  ";;; starfield layer 0\n" +
-	  genStarLayer() + "\n" +
-	  ";;; starfield layer 1\n" +
-	  genStarLayer() + "\n"
-	  // ";;; starfield layer 2\n" +
-	  // genStarLayer()
-	)
+    println(
+      ";;; starfield layer 0\n" +
+      genStarLayer() + "\n" +
+      ";;; starfield layer 1\n" +
+      genStarLayer() + "\n"
+      // ";;; starfield layer 2\n" +
+      // genStarLayer()
+    )
   }
 
   def genStarLayer() = {
-	val numStars = 13 // TODO 13?
+    val numStars = 13 // TODO 13?
 
     val stars = for (i <- 0 to numStars) yield { 
       val row = (rnd.nextFloat * 23).toInt
@@ -26,9 +26,9 @@ object Gen {
       XY(screenRamRowAdr, column, colorRamRowAdr)
     }
 
-	stars.map(_.screenRowAdr)  .mkString("\t\t.word $", ", $", "\n") +
-	stars.map(_.column)        .mkString("\t\t.byte ", ", ", "\n") +
-	stars.map(_.colorRamRowAdr).mkString("\t\t.word $", ", $", "\n")
+    stars.map(_.screenRowAdr)  .mkString("\t\t.word $", ", $", "\n") +
+    stars.map(_.column)        .mkString("\t\t.byte ", ", ", "\n") +
+    stars.map(_.colorRamRowAdr).mkString("\t\t.word $", ", $", "\n")
   }
 }
 
