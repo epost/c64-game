@@ -1,28 +1,30 @@
-object Gen {
+object generators {
 
-  val rnd = util.Random
+  val rng = scala.util.Random
   
   case class XY(screenRowAdr: String, column: Int, colorRamRowAdr: String)
 
-  def genStarLayers() {
-    println(
-      ";;; starfield layer 0\n" +
-      genStarLayer() + "\n" +
-      ";;; starfield layer 1\n" +
-      genStarLayer() + "\n"
-      // ";;; starfield layer 2\n" +
-      // genStarLayer()
-    )
+  def main(args: Array[String]): Unit = {
+    // copy and paste the resulting data into the asm source code
+    println(genStarLayers)
   }
 
-  def genStarLayer() = {
+  def genStarLayers(): String =
+    ";;; starfield layer 0\n" +
+    genStarLayer() + "\n" +
+    ";;; starfield layer 1\n" +
+    genStarLayer() + "\n"
+    // ";;; starfield layer 2\n" +
+    // genStarLayer()
+
+  def genStarLayer(): String = {
     val numStars = 13 // TODO 13?
 
     val stars = for (i <- 0 to numStars) yield { 
-      val row = (rnd.nextFloat * 23).toInt
+      val row = (rng.nextFloat * 23).toInt
       val screenRamRowAdr = Integer.toHexString(0x0400 + row*40)
       val colorRamRowAdr = Integer.toHexString(0xd800 + row*40)
-      val column = (rnd.nextFloat * 39).toInt
+      val column = (rng.nextFloat * 39).toInt
       XY(screenRamRowAdr, column, colorRamRowAdr)
     }
 
